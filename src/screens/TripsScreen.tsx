@@ -47,8 +47,8 @@ const TripsScreen = () => {
     try {
       if (!driver) return;
       
-      // Filter by database statuses: assigned, confirmed (no in_transit status exists)
-      const data = await driverService.getDriverTrips(driver.id, 'assigned,confirmed');
+      // Filter by database statuses: assigned, confirmed, in_progress
+      const data = await driverService.getDriverTrips(driver.id, 'assigned,confirmed,in_progress');
       setTrips(data as Trip[]);
     } catch (error: any) {
       Alert.alert('Error', 'Failed to load trips');
