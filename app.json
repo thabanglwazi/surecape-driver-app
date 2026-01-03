@@ -13,9 +13,24 @@
       "backgroundColor": "#008080"
     },
     "primaryColor": "#008080",
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "SureCape Driver needs your location to track trips, provide accurate ETAs to customers, and optimize driver dispatch.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ]
+    ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.surecape.driver"
+      "bundleIdentifier": "com.surecape.driver",
+      "infoPlist": {
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "SureCape Driver needs your location to track trips, provide accurate ETAs to customers, and optimize driver dispatch.",
+        "NSLocationWhenInUseUsageDescription": "SureCape Driver needs your location to track trips and provide accurate ETAs to customers.",
+        "UIBackgroundModes": ["location"]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -24,7 +39,14 @@
       },
       "package": "com.surecape.driver",
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/images/favicon.ico"

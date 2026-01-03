@@ -1,8 +1,15 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Platform } from 'react-native';
+import { Platform, Alert, Linking } from 'react-native';
 import { supabase } from '../services/supabase';
 import { Driver, AuthContextType } from '../types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  requestLocationPermissions,
+  checkLocationPermissions,
+  startLocationTracking,
+  stopLocationTracking,
+  isLocationEnabled,
+} from '../services/locationService';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -115,11 +122,69 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     setDriver(driverData);
+
+    // Request and enforce location permissions after successful login
+    await enforceLocationPermissions(driverData.id);
+  };
+
+  const enforceLocationPermissions = async (driverId: string) => {
+    try {
+      // Check if location services are enabled
+      const locationEnabled = await isLocationEnabled();
+      if (!locationEnabled) {
+        Alert.alert(
+          'Location Services Required',
+          'Please enable location services in your device settings to continue.',
+          [
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            { text: 'Cancel', style: 'cancel' },
+          ]
+        );
+        return;
+      }
+
+      // Check current permissions
+      const permissions = await checkLocationPermissions();
+      
+      if (!permissions.foreground || !permissions.background) {
+        // Request permissions
+        const granted = await requestLocationPermissions();
+        
+        if (!granted) {
+          Alert.alert(
+            'Location Permission Required',
+            'SureCape Driver requires location access to track your trips and provide accurate ETAs to customers. Please grant location permissions (including "Always Allow") to continue.',
+            [
+              { text: 'Open Settings', onPress: () => Linking.openSettings() },
+              { 
+                text: 'Try Again', 
+                onPress: () => enforceLocationPermissions(driverId) 
+              },
+            ]
+          );
+          return;
+        }
+      }
+
+      // Start background location tracking
+      const trackingStarted = await startLocationTracking(driverId);
+      if (trackingStarted) {
+        console.log('✅ Location tracking started for driver:', driverId);
+      } else {
+        console.error('Failed to start location tracking');
+      }
+    } catch (error) {
+      console.error('Error enforcing location permissions:', error);
+    }
   };
 
   const signOut = async () => {
     try {
       console.log('Starting sign out process...');
+      
+      // Stop location tracking before signing out
+      await stopLocationTracking();
+      
       const { error } = await supabase.auth.signOut();
       if (error) {
         // Ignore "Auth session missing" error - user is already signed out
