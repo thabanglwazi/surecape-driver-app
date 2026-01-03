@@ -27,12 +27,29 @@ ADD COLUMN IF NOT EXISTS current_longitude DOUBLE PRECISION,
 ADD COLUMN IF NOT EXISTS last_location_update TIMESTAMPTZ;
 
 -- 4. Ensure driver_assignments status enum includes all required statuses
--- Note: If using an enum type, you may need to add 'in_progress' status:
--- ALTER TYPE assignment_status ADD VALUE IF NOT EXISTS 'in_progress';
+-- First, check what constraint exists
+DO $$
+BEGIN
+  -- Drop the old check constraint if it exists
+  ALTER TABLE driver_assignments DROP CONSTRAINT IF EXISTS driver_assignments_status_check;
+  
+  -- Add new check constraint with in_progress status
+  ALTER TABLE driver_assignments 
+  ADD CONSTRAINT driver_assignments_status_check 
+  CHECK (status IN ('assigned', 'confirmed', 'in_progress', 'completed', 'cancelled', 'declined'));
+END $$;
 
 -- 5. Ensure bookings status enum includes 'in_progress'
--- Note: If using an enum type, you may need to add 'in_progress' status:
--- ALTER TYPE booking_status ADD VALUE IF NOT EXISTS 'in_progress';
+DO $$
+BEGIN
+  -- Drop the old check constraint if it exists
+  ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_status_check;
+  
+  -- Add new check constraint with in_progress status
+  ALTER TABLE bookings 
+  ADD CONSTRAINT bookings_status_check 
+  CHECK (status IN ('pending', 'confirmed', 'in_progress', 'completed', 'cancelled'));
+END $$;
 
 -- 6. Add tracking_url column to bookings for customer tracking links (optional)
 ALTER TABLE bookings
