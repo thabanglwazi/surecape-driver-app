@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRoute, RouteProp, useNavigation } from '@react-navigation/native';
-import { driverService } from '../services/supabase';
+import { driverService, supabase } from '../services/supabase';
 import { Trip, RootStackParamList } from '../types';
 
 type TripDetailRouteProp = RouteProp<RootStackParamList, 'TripDetail'>;
@@ -127,7 +127,7 @@ const TripDetailScreen = () => {
       console.log('🚗 Starting trip - Trip ID:', tripId);
       
       // Update assignment status to in_progress
-      const { error: assignmentError } = await driverService.supabase
+      const { error: assignmentError } = await supabase
         .from('driver_assignments')
         .update({ 
           status: 'in_progress',
@@ -142,7 +142,7 @@ const TripDetailScreen = () => {
       }
 
       // Update booking status to in_progress
-      const { error: bookingError } = await driverService.supabase
+      const { error: bookingError } = await supabase
         .from('bookings')
         .update({ 
           status: 'in_progress',
