@@ -23,6 +23,7 @@ const TripDetailScreen = () => {
   const [trip, setTrip] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [starting, setStarting] = useState(false);
 
   useEffect(() => {
     loadTripDetails();
@@ -118,6 +119,55 @@ const TripDetailScreen = () => {
     });
   };
 
+  const startTrip = async () => {
+    setStarting(true);
+    
+    try {
+      const now = new Date().toISOString();
+      console.log('🚗 Starting trip - Trip ID:', tripId);
+      
+      // Update assignment status to in_progress
+      const { error: assignmentError } = await driverService.supabase
+        .from('driver_assignments')
+        .update({ 
+          status: 'in_progress',
+          started_at: now,
+          updated_at: now
+        })
+        .eq('id', tripId);
+
+      if (assignmentError) {
+        console.error('❌ Assignment update error:', assignmentError);
+        throw assignmentError;
+      }
+
+      // Update booking status to in_progress
+      const { error: bookingError } = await driverService.supabase
+        .from('bookings')
+        .update({ 
+          status: 'in_progress',
+          updated_at: now
+        })
+        .eq('id', trip.booking_id);
+
+      if (bookingError) {
+        console.error('❌ Booking update error:', bookingError);
+        throw bookingError;
+      }
+
+      // Reload trip data
+      await loadTripDetails();
+      
+      Alert.alert('Success', '🚗 Trip started! Customer has been notified.');
+      
+    } catch (error: any) {
+      console.error('Error starting trip:', error);
+      Alert.alert('Error', 'Failed to start trip: ' + error.message);
+    } finally {
+      setStarting(false);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.centered}>
@@ -144,6 +194,8 @@ const TripDetailScreen = () => {
         return '#FF9500';
       case 'confirmed':
         return '#008080';
+      case 'in_progress':
+        return '#2196F3';
       case 'completed':
         return '#34C759';
       case 'cancelled':
@@ -158,7 +210,9 @@ const TripDetailScreen = () => {
       case 'assigned':
         return 'NEW TRIP';
       case 'confirmed':
-        return 'ACCEPTED - IN PROGRESS';
+        return 'ACCEPTED';
+      case 'in_progress':
+        return 'IN PROGRESS';
       case 'completed':
         return 'COMPLETED';
       case 'cancelled':
@@ -322,11 +376,38 @@ const TripDetailScreen = () => {
             </View>
             
             <TouchableOpacity
-              style={[styles.actionButton, styles.completeButton]}
+              style={[styles.actionButton, styles.startTripButton, starting && styles.buttonDisabled]}
+              onPress={startTrip}
+              disabled={starting}
+            >
+              <Text style={styles.actionButtonText}>
+                {starting ? 'Starting Trip...' : '🚗 Confirm Pickup & Start Trip'}
+              </Text>
+            </TouchableOpacity>
+          </>
+        )}
+
+        {trip.status === 'in_progress' && (
+          <>
+            <View style={styles.inProgressBadge}>
+              <Text style={styles.inProgressText}>
+                🛣️ Trip In Progress
+              </Text>
+              {trip.started_at && (
+                <Text style={styles.inProgressTime}>
+                  Started: {new Date(trip.started_at).toLocaleTimeString()}
+                </Text>
+              )}
+            </View>
+            
+            <TouchableOpacity
+              style={[styles.actionButton, styles.completeButton, updating && styles.buttonDisabled]}
               onPress={() => handleStatusUpdate('completed')}
               disabled={updating}
             >
-              <Text style={styles.actionButtonText}>Complete Trip</Text>
+              <Text style={styles.actionButtonText}>
+                {updating ? 'Completing Trip...' : '✅ Complete Trip'}
+              </Text>
             </TouchableOpacity>
           </>
         )}
@@ -466,6 +547,9 @@ const styles = StyleSheet.create({
   acceptButton: {
     backgroundColor: '#34C759',
   },
+  startTripButton: {
+    backgroundColor: '#2196F3',
+  },
   startButton: {
     backgroundColor: '#008080',
   },
@@ -484,6 +568,27 @@ const styles = StyleSheet.create({
   },
   declineText: {
     color: '#FF3B30',
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+  inProgressBadge: {
+    backgroundColor: '#E3F2FD',
+    padding: 12,
+    borderRadius: 8,
+    marginVertical: 8,
+    borderWidth: 1,
+    borderColor: '#2196F3',
+  },
+  inProgressText: {
+    color: '#1976D2',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  inProgressTime: {
+    color: '#1976D2',
+    fontSize: 12,
+    marginTop: 4,
   },
 });
 
