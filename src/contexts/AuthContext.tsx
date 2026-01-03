@@ -9,7 +9,7 @@ import {
   startLocationTracking,
   stopLocationTracking,
   isLocationEnabled,
-} from '../services/locationService';
+} from '../services/locationServiceExpoDev';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
