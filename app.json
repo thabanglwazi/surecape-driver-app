@@ -1,30 +1,38 @@
 {
   "expo": {
-    "name": "surecape-driver-app",
+    "name": "SureCape Driver",
     "slug": "surecape-driver-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/images/surecape_icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/images/surecape_icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#008080"
     },
+    "primaryColor": "#008080",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.surecape.driver"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/images/surecape_icon.png",
+        "backgroundColor": "#008080"
       },
+      "package": "com.surecape.driver",
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/images/favicon.ico"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "surecape-driver-app"
+      }
     }
   }
 }

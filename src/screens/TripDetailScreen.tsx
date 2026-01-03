@@ -26,13 +26,37 @@ const TripDetailScreen = () => {
 
   useEffect(() => {
     loadTripDetails();
+    
+    // Setup real-time subscription for this specific trip
+    const subscription = driverService.subscribeToTripUpdates(tripId, (payload) => {
+      console.log('Trip detail updated in real-time:', payload);
+      loadTripDetails();
+    }, 'id');
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [tripId]);
 
   const loadTripDetails = async () => {
     try {
       const data = await driverService.getTripById(tripId);
+      console.log('=== TRIP DETAIL DATA ===');
+      console.log('Full trip data:', JSON.stringify(data, null, 2));
+      console.log('Selected vehicle ID:', data?.selected_vehicle_id);
+      console.log('Selected vehicles array:', data?.selected_vehicles);
+      console.log('Driver vehicle_info:', data?.driver?.vehicle_info);
+      console.log('Booking data:', data?.booking);
+      console.log('Customer from table:', data?.booking?.customer);
+      console.log('Customer from trip_details:', data?.booking?.trip_details?.customerInfo);
+      const customerData = data?.booking?.trip_details?.customerInfo || data?.booking?.customer;
+      console.log('Using customer data:', customerData);
+      console.log('Customer name:', customerData?.name);
+      console.log('Customer email:', customerData?.email);
+      console.log('Customer phone:', customerData?.phone);
       setTrip(data);
     } catch (error: any) {
+      console.error('Error loading trip details:', error);
       Alert.alert('Error', 'Failed to load trip details');
       navigation.goBack();
     } finally {
@@ -52,8 +76,19 @@ const TripDetailScreen = () => {
             setUpdating(true);
             try {
               await driverService.updateTripStatus(tripId, newStatus);
-              await loadTripDetails();
-              Alert.alert('Success', 'Trip status updated');
+              
+              // If trip is completed or cancelled, navigate back to refresh the lists
+              if (newStatus === 'completed' || newStatus === 'declined') {
+                Alert.alert('Success', 'Trip status updated', [
+                  {
+                    text: 'OK',
+                    onPress: () => navigation.goBack(),
+                  },
+                ]);
+              } else {
+                await loadTripDetails();
+                Alert.alert('Success', 'Trip status updated');
+              }
             } catch (error: any) {
               Alert.alert('Error', 'Failed to update status');
             } finally {
@@ -66,8 +101,10 @@ const TripDetailScreen = () => {
   };
 
   const handleCallCustomer = () => {
-    if (trip?.booking?.customer?.cell) {
-      Linking.openURL(`tel:${trip.booking.customer.cell}`);
+    const customerData = trip?.booking?.trip_details?.customerInfo || trip?.booking?.customer;
+    const phone = customerData?.phone || customerData?.cell;
+    if (phone) {
+      Linking.openURL(`tel:${phone}`);
     }
   };
 
@@ -98,14 +135,45 @@ const TripDetailScreen = () => {
   }
 
   const booking = trip.booking;
-  const customer = booking?.customer;
+  // Customer data is stored in trip_details.customerInfo, not a separate table
+  const customer = booking?.trip_details?.customerInfo || booking?.customer;
+
+  const getStatusColor = () => {
+    switch (trip.status) {
+      case 'assigned':
+        return '#FF9500';
+      case 'confirmed':
+        return '#008080';
+      case 'completed':
+        return '#34C759';
+      case 'cancelled':
+        return '#FF3B30';
+      default:
+        return '#666';
+    }
+  };
+
+  const getStatusText = () => {
+    switch (trip.status) {
+      case 'assigned':
+        return 'NEW TRIP';
+      case 'confirmed':
+        return 'ACCEPTED - IN PROGRESS';
+      case 'completed':
+        return 'COMPLETED';
+      case 'cancelled':
+        return 'CANCELLED';
+      default:
+        return trip.status.toUpperCase();
+    }
+  };
 
   return (
     <ScrollView style={styles.container}>
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Trip Status</Text>
-        <View style={styles.statusBadge}>
-          <Text style={styles.statusText}>{trip.status.toUpperCase()}</Text>
+        <View style={[styles.statusBadge, { backgroundColor: getStatusColor() }]}>
+          <Text style={styles.statusText}>{getStatusText()}</Text>
         </View>
       </View>
 
@@ -121,7 +189,23 @@ const TripDetailScreen = () => {
         </View>
         <View style={styles.detailRow}>
           <Text style={styles.label}>Vehicle:</Text>
-          <Text style={styles.value}>{booking?.vehicle_type}</Text>
+          <Text style={styles.value}>
+            {typeof booking?.vehicle_type === 'object' 
+              ? booking?.vehicle_type?.name || 'N/A'
+              : booking?.vehicle_type || 'N/A'}
+          </Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Text style={styles.label}>License Plate:</Text>
+          <Text style={[styles.value, !trip.selected_vehicles?.[0]?.license_plate && styles.warningText]}>
+            {trip.selected_vehicles?.[0]?.license_plate || 
+             trip.selected_vehicles?.[0]?.licensePlate ||
+             trip.selected_vehicles?.[0]?.registration_number ||
+             trip.selected_vehicles?.[0]?.registrationNumber ||
+             trip.driver?.vehicle_info?.license_plate ||
+             trip.driver?.vehicle_info?.licensePlate ||
+             'Add vehicle via web app'}
+          </Text>
         </View>
         <View style={styles.detailRow}>
           <Text style={styles.label}>Date & Time:</Text>
@@ -136,21 +220,45 @@ const TripDetailScreen = () => {
         
         <View style={styles.locationCard}>
           <Text style={styles.locationLabel}>📍 Pickup</Text>
-          <Text style={styles.locationText}>{booking?.pickup_location}</Text>
+          <Text style={styles.locationText}>
+            {booking?.pickup_location?.address || booking?.pickup_location || 'No pickup location'}
+          </Text>
           <TouchableOpacity
             style={styles.navigateButton}
-            onPress={() => handleNavigate(booking?.pickup_location)}
+            onPress={() => handleNavigate(booking?.pickup_location?.address || booking?.pickup_location)}
           >
             <Text style={styles.navigateButtonText}>Navigate</Text>
           </TouchableOpacity>
         </View>
 
+        {/* Display stops if they exist */}
+        {booking?.trip_details?.stops && booking.trip_details.stops.length > 0 && (
+          <>
+            {booking.trip_details.stops.map((stop: any, index: number) => (
+              <View key={index} style={styles.locationCard}>
+                <Text style={styles.locationLabel}>🛑 Stop {index + 1}</Text>
+                <Text style={styles.locationText}>
+                  {stop?.address || stop || 'No address'}
+                </Text>
+                <TouchableOpacity
+                  style={styles.navigateButton}
+                  onPress={() => handleNavigate(stop?.address || stop)}
+                >
+                  <Text style={styles.navigateButtonText}>Navigate</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </>
+        )}
+
         <View style={styles.locationCard}>
           <Text style={styles.locationLabel}>🏁 Drop-off</Text>
-          <Text style={styles.locationText}>{booking?.dropoff_location}</Text>
+          <Text style={styles.locationText}>
+            {booking?.dropoff_location?.address || booking?.dropoff_location || 'No dropoff location'}
+          </Text>
           <TouchableOpacity
             style={styles.navigateButton}
-            onPress={() => handleNavigate(booking?.dropoff_location)}
+            onPress={() => handleNavigate(booking?.dropoff_location?.address || booking?.dropoff_location)}
           >
             <Text style={styles.navigateButtonText}>Navigate</Text>
           </TouchableOpacity>
@@ -162,12 +270,16 @@ const TripDetailScreen = () => {
         <View style={styles.detailRow}>
           <Text style={styles.label}>Name:</Text>
           <Text style={styles.value}>
-            {customer?.name} {customer?.surname}
+            {customer?.name} {customer?.surname || ''}
           </Text>
         </View>
         <View style={styles.detailRow}>
+          <Text style={styles.label}>Email:</Text>
+          <Text style={styles.value}>{customer?.email || 'N/A'}</Text>
+        </View>
+        <View style={styles.detailRow}>
           <Text style={styles.label}>Phone:</Text>
-          <Text style={styles.value}>{customer?.cell}</Text>
+          <Text style={styles.value}>{customer?.phone || customer?.cell}</Text>
         </View>
         <TouchableOpacity style={styles.callButton} onPress={handleCallCustomer}>
           <Text style={styles.callButtonText}>📞 Call Customer</Text>
@@ -203,24 +315,20 @@ const TripDetailScreen = () => {
           </>
         )}
 
-        {trip.status === 'accepted' && (
-          <TouchableOpacity
-            style={[styles.actionButton, styles.startButton]}
-            onPress={() => handleStatusUpdate('started')}
-            disabled={updating}
-          >
-            <Text style={styles.actionButtonText}>Start Trip</Text>
-          </TouchableOpacity>
-        )}
-
-        {trip.status === 'started' && (
-          <TouchableOpacity
-            style={[styles.actionButton, styles.completeButton]}
-            onPress={() => handleStatusUpdate('completed')}
-            disabled={updating}
-          >
-            <Text style={styles.actionButtonText}>Complete Trip</Text>
-          </TouchableOpacity>
+        {trip.status === 'confirmed' && (
+          <>
+            <View style={styles.statusBanner}>
+              <Text style={styles.statusBannerText}>✓ Trip Accepted - Ready to Start</Text>
+            </View>
+            
+            <TouchableOpacity
+              style={[styles.actionButton, styles.completeButton]}
+              onPress={() => handleStatusUpdate('completed')}
+              disabled={updating}
+            >
+              <Text style={styles.actionButtonText}>Complete Trip</Text>
+            </TouchableOpacity>
+          </>
         )}
       </View>
     </ScrollView>
@@ -249,16 +357,17 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   statusBadge: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignSelf: 'stretch',
+    alignItems: 'center',
   },
   statusText: {
     color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
+    fontWeight: '700',
+    fontSize: 16,
+    letterSpacing: 0.5,
   },
   detailRow: {
     flexDirection: 'row',
@@ -293,7 +402,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   navigateButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#008080',
     padding: 10,
     borderRadius: 8,
     alignItems: 'center',
@@ -314,6 +423,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  licensePlate: {
+    backgroundColor: '#f0f9ff',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    fontWeight: '600',
+    fontSize: 16,
+    letterSpacing: 1,
+  },
+  warningText: {
+    color: '#FF9500',
+    fontStyle: 'italic',
+    fontSize: 14,
+  },
   specialRequests: {
     fontSize: 16,
     color: '#333',
@@ -328,11 +451,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
+  statusBanner: {
+    backgroundColor: '#008080',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  statusBannerText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   acceptButton: {
     backgroundColor: '#34C759',
   },
   startButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#008080',
   },
   completeButton: {
     backgroundColor: '#FF9500',

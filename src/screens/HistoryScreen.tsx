@@ -6,11 +6,14 @@ import {
   StyleSheet,
   RefreshControl,
   Alert,
+  Image,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
 import { driverService } from '../services/supabase';
 import { Trip } from '../types';
 import TripCard from '../components/TripCard';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const HistoryScreen = () => {
   const [trips, setTrips] = useState<Trip[]>([]);
@@ -24,11 +27,21 @@ const HistoryScreen = () => {
     }
   }, [driver]);
 
+  // Reload history when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      if (driver) {
+        loadHistory();
+      }
+    }, [driver])
+  );
+
   const loadHistory = async () => {
     try {
       if (!driver) return;
       
-      const data = await driverService.getDriverTrips(driver.id, 'completed,declined');
+      // Filter by database statuses: completed, cancelled
+      const data = await driverService.getDriverTrips(driver.id, 'completed,cancelled');
       setTrips(data as Trip[]);
     } catch (error: any) {
       Alert.alert('Error', 'Failed to load history');
@@ -53,12 +66,30 @@ const HistoryScreen = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Trip History</Text>
-        <Text style={styles.headerSubtitle}>
-          {trips.length} completed {trips.length === 1 ? 'trip' : 'trips'}
-        </Text>
-      </View>
+      <LinearGradient
+        colors={['#134e5e', '#71b280']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
+        <View style={styles.headerContent}>
+          <View style={styles.logoContainer}>
+            <Image
+              source={require('../../assets/images/surecape-logo.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+          </View>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.headerTitle}>Trip History</Text>
+            <View style={styles.tripCountBadge}>
+              <Text style={styles.tripCountText}>
+                {trips.length} completed
+              </Text>
+            </View>
+          </View>
+        </View>
+      </LinearGradient>
 
       {trips.length === 0 ? (
         <View style={styles.empty}>
@@ -91,21 +122,63 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
   header: {
-    backgroundColor: '#fff',
-    padding: 20,
     paddingTop: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  logoContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 4,
+  },
+  logo: {
+    width: 45,
+    height: 45,
+  },
+  headerTextContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#ffffff',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
-  headerSubtitle: {
+  tripCountBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+  },
+  tripCountText: {
     fontSize: 14,
-    color: '#666',
-    marginTop: 5,
+    fontWeight: '600',
+    color: '#ffffff',
   },
   centered: {
     flex: 1,

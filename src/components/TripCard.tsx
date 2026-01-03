@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Trip } from '../types';
+import { Colors } from '../constants/theme';
 
 interface TripCardProps {
   trip: Trip | any;
@@ -15,17 +16,30 @@ const TripCard: React.FC<TripCardProps> = ({ trip, onPress, isHistory }) => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'assigned':
-        return '#FF9500';
-      case 'accepted':
-        return '#007AFF';
-      case 'started':
-        return '#5856D6';
+        return Colors.statusAssigned;
+      case 'confirmed':
+        return Colors.statusConfirmed;
       case 'completed':
-        return '#34C759';
-      case 'declined':
-        return '#FF3B30';
+        return Colors.statusCompleted;
+      case 'cancelled':
+        return Colors.statusCancelled;
       default:
-        return '#8E8E93';
+        return Colors.gray;
+    }
+  };
+
+  const getStatusDisplay = (status: string) => {
+    switch (status) {
+      case 'assigned':
+        return 'NEW';
+      case 'confirmed':
+        return 'ACCEPTED';
+      case 'completed':
+        return 'COMPLETED';
+      case 'cancelled':
+        return 'CANCELLED';
+      default:
+        return status.toUpperCase();
     }
   };
 
@@ -47,7 +61,7 @@ const TripCard: React.FC<TripCardProps> = ({ trip, onPress, isHistory }) => {
       <View style={styles.header}>
         <Text style={styles.bookingType}>{booking?.booking_type?.toUpperCase()}</Text>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(trip.status) }]}>
-          <Text style={styles.statusText}>{trip.status.toUpperCase()}</Text>
+          <Text style={styles.statusText}>{getStatusDisplay(trip.status)}</Text>
         </View>
       </View>
 
@@ -55,16 +69,33 @@ const TripCard: React.FC<TripCardProps> = ({ trip, onPress, isHistory }) => {
         <View style={styles.locationSection}>
           <Text style={styles.locationLabel}>📍 Pickup</Text>
           <Text style={styles.locationText} numberOfLines={1}>
-            {booking?.pickup_location}
+            {booking?.pickup_location?.address || booking?.pickup_location || 'No pickup location'}
           </Text>
         </View>
+
+        {/* Display stops if they exist */}
+        {booking?.trip_details?.stops && booking.trip_details.stops.length > 0 && (
+          <>
+            {booking.trip_details.stops.map((stop: any, index: number) => (
+              <React.Fragment key={index}>
+                <View style={styles.divider} />
+                <View style={styles.locationSection}>
+                  <Text style={styles.locationLabel}>🛑 Stop {index + 1}</Text>
+                  <Text style={styles.locationText} numberOfLines={1}>
+                    {stop?.address || stop || 'No address'}
+                  </Text>
+                </View>
+              </React.Fragment>
+            ))}
+          </>
+        )}
 
         <View style={styles.divider} />
 
         <View style={styles.locationSection}>
           <Text style={styles.locationLabel}>🏁 Drop-off</Text>
           <Text style={styles.locationText} numberOfLines={1}>
-            {booking?.dropoff_location}
+            {booking?.dropoff_location?.address || booking?.dropoff_location || 'No dropoff location'}
           </Text>
         </View>
       </View>
@@ -103,10 +134,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 15,
     marginBottom: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
     elevation: 3,
   },
   historyCard: {

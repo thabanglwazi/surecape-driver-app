@@ -2,6 +2,13 @@
 
 A cross-platform mobile application for SureCape drivers built with React Native (Expo) and TypeScript.
 
+## 📚 Documentation
+
+- **[Integration Analysis](WEB_APP_INTEGRATION_ANALYSIS.md)** - Complete web app integration guide
+- **[Integration Summary](INTEGRATION_SUMMARY.md)** - What was done and next steps
+- **[Quick Reference](QUICK_REFERENCE.md)** - Quick lookup for common patterns
+- **[Setup Guide](SETUP.md)** - Initial setup instructions
+
 ## Features
 
 - 📱 **Cross-platform**: Runs on both iOS and Android

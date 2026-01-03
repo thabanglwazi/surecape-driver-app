@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 import { supabase } from '../services/supabase';
 import { Driver, AuthContextType } from '../types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -6,59 +7,110 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<any>(null);
   const [driver, setDriver] = useState<Driver | null>(null);
   const [loading, setLoading] = useState(true);
 
+  console.log('===== AUTH PROVIDER RENDERING =====', { loading, hasDriver: !!driver });
+
   useEffect(() => {
-    // Check if user is already logged in
-    checkSession();
+    console.log('===== AUTH PROVIDER MOUNTED =====');
+    // Check if user is already logged in with timeout
+    const timeoutId = setTimeout(() => {
+      console.log('Session check timeout - forcing loading to false');
+      setLoading(false);
+    }, 10000); // 10 second timeout
+
+    checkSession().finally(() => {
+      clearTimeout(timeoutId);
+    });
+
+    return () => clearTimeout(timeoutId);
   }, []);
 
   const checkSession = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      console.log('Checking session...');
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Session error:', sessionError);
+        setLoading(false);
+        return;
+      }
       
       if (session?.user) {
+        console.log('Session found for user:', session.user.email);
+        setUser(session.user);
         // Fetch driver data
-        const { data: driverData } = await supabase
+        const { data: driverData, error: driverError } = await supabase
           .from('drivers')
           .select('*')
           .eq('email', session.user.email)
           .single();
         
-        if (driverData) {
+        if (driverError) {
+          console.error('Driver fetch error:', driverError);
+          // If it's a 406 or permission error, user might not be authenticated properly
+          if (driverError.code === 'PGRST116' || driverError.message?.includes('406')) {
+            // Clear invalid session
+            await supabase.auth.signOut();
+          }
+        } else if (driverData) {
+          console.log('Driver data loaded:', driverData.email);
           setDriver(driverData);
         }
+      } else {
+        console.log('No active session found');
       }
     } catch (error) {
       console.error('Session check error:', error);
     } finally {
+      console.log('Session check complete, setting loading to false');
       setLoading(false);
     }
   };
 
   const signIn = async (email: string, password: string) => {
+    // Sign in with email and password
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+      email: email,
+      password: password,
     });
 
     if (authError) {
+      console.error('Auth error:', authError);
       throw authError;
     }
 
-    // Fetch driver data
+    console.log('Auth successful, user:', authData.user?.email);
+
+    // Fetch driver data using email
     const { data: driverData, error: driverError } = await supabase
       .from('drivers')
       .select('*')
       .eq('email', email)
       .single();
 
+    console.log('Driver query - data:', driverData, 'error:', driverError);
+
     if (driverError) {
-      throw new Error('Driver not found');
+      console.error('Driver fetch error:', driverError);
+      // Clear the auth session since driver doesn't exist
+      await supabase.auth.signOut();
+      
+      if (driverError.code === 'PGRST116') {
+        throw new Error('Your account is not registered as a driver. Please contact support@surecape.co.za to be added as a driver.');
+      }
+      throw new Error(`Driver not found: ${driverError.message}`);
     }
 
-    if (!driverData.is_active) {
+    if (!driverData) {
+      await supabase.auth.signOut();
+      throw new Error('Your account is not registered as a driver. Please contact support@surecape.co.za');
+    }
+
+    if (driverData.status !== 'active') {
       throw new Error('Driver account is inactive');
     }
 
@@ -66,13 +118,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    await AsyncStorage.clear();
-    setDriver(null);
+    try {
+      console.log('Starting sign out process...');
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        // Ignore "Auth session missing" error - user is already signed out
+        if (error.message !== 'Auth session missing!') {
+          console.error('Supabase sign out error:', error);
+          throw error;
+        } else {
+          console.log('No active session to sign out');
+        }
+      }
+      await AsyncStorage.clear();
+      setDriver(null);
+      setUser(null);
+      console.log('Sign out completed successfully');
+    } catch (error) {
+      console.error('Sign out error:', error);
+      throw error;
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ driver, loading, signIn, signOut }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        driver,
+        loading,
+        signIn,
+        signOut,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

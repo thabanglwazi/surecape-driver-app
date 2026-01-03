@@ -1,4 +1,5 @@
 import React from 'react';
+import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -10,6 +11,7 @@ import TripsScreen from '../screens/TripsScreen';
 import TripDetailScreen from '../screens/TripDetailScreen';
 import HistoryScreen from '../screens/HistoryScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import { Colors } from '../constants/theme';
 
 import { RootStackParamList, TabParamList } from '../types';
 
@@ -33,7 +35,7 @@ const TabNavigator = () => {
 
           return <Ionicons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#007AFF',
+        tabBarActiveTintColor: '#008080',
         tabBarInactiveTintColor: 'gray',
         headerShown: false,
       })}
@@ -61,7 +63,12 @@ const AppNavigator = () => {
   const { driver, loading } = useAuth();
 
   if (loading) {
-    return null; // You can replace this with a loading screen component
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <Text style={styles.loadingText}>Loading...</Text>
+      </View>
+    );
   }
 
   return (
@@ -87,5 +94,19 @@ const AppNavigator = () => {
     </NavigationContainer>
   );
 };
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: Colors.textSecondary,
+  },
+});
 
 export default AppNavigator;
