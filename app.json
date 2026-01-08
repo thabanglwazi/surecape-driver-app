@@ -32,7 +32,8 @@
         "NSLocationWhenInUseUsageDescription": "SureCape Driver needs your location to track trips and provide accurate ETAs to customers.",
         "UIBackgroundModes": [
           "location",
-          "location"
+          "fetch",
+          "processing"
         ],
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -43,7 +44,7 @@
         "backgroundColor": "#008080"
       },
       "package": "com.surecape.driver",
-      "versionCode": 3,
+      "versionCode": 4,
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [

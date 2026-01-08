@@ -1,11 +1,15 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform, Linking, Alert } from 'react-native';
+import { Platform, Linking, Alert, AppState, AppStateStatus } from 'react-native';
 import { supabase } from './supabase';
 
 const LOCATION_TRACKING_TASK = 'background-location-tracking';
 const DRIVER_ID_KEY = '@current_driver_id';
+const TRACKING_ACTIVE_KEY = '@tracking_active';
+
+// App state subscription for monitoring lifecycle
+let appStateSubscription: any = null;
 
 // Interface for location update
 interface LocationUpdate {
@@ -203,6 +207,9 @@ export const startLocationTracking = async (driverId: string): Promise<boolean> 
     // Save driver ID to AsyncStorage for background task
     await AsyncStorage.setItem(DRIVER_ID_KEY, driverId);
     
+    // Mark tracking as active
+    await AsyncStorage.setItem(TRACKING_ACTIVE_KEY, 'true');
+    
     // Start tracking with aggressive foreground service settings
     await Location.startLocationUpdatesAsync(LOCATION_TRACKING_TASK, {
       accuracy: Location.Accuracy.BestForNavigation,
@@ -220,7 +227,18 @@ export const startLocationTracking = async (driverId: string): Promise<boolean> 
       pausesUpdatesAutomatically: false, // Never pause
       showsBackgroundLocationIndicator: true,
       mayShowUserSettingsDialog: false,
+      // iOS specific settings
+      ...(Platform.OS === 'ios' ? {
+        allowsBackgroundLocationUpdates: true,
+        showsBackgroundLocationIndicator: true,
+      } : {}),
     });
+    
+    // Set up app state listener to restart tracking if needed
+    if (!appStateSubscription) {
+      appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
+      console.log('✅ App state listener registered');
+    }
 
     console.log('✅ Location tracking started');
     
@@ -256,6 +274,15 @@ export const stopLocationTracking = async (): Promise<void> => {
     if (isTracking) {
       await Location.stopLocationUpdatesAsync(LOCATION_TRACKING_TASK);
       await AsyncStorage.removeItem(DRIVER_ID_KEY);
+      await AsyncStorage.removeItem(TRACKING_ACTIVE_KEY);
+      
+      // Remove app state listener
+      if (appStateSubscription) {
+        appStateSubscription.remove();
+        appStateSubscription = null;
+        console.log('✅ App state listener removed');
+      }
+      
       console.log('Location tracking stopped');
     }
   } catch (error) {
@@ -263,15 +290,44 @@ export const stopLocationTracking = async (): Promise<void> => {
   }
 };
 
-// Restore tracking if needed (after app restart)
+// Handle app state changes to restart tracking if needed
+const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+  console.log('📱 App state changed to:', nextAppState);
+  
+  if (nextAppState === 'active') {
+    // App came to foreground, check if tracking should be active
+    const shouldBeTracking = await AsyncStorage.getItem(TRACKING_ACTIVE_KEY);
+    const driverId = await AsyncStorage.getItem(DRIVER_ID_KEY);
+    
+    if (shouldBeTracking === 'true' && driverId) {
+      const isCurrentlyTracking = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING_TASK);
+      
+      if (!isCurrentlyTracking) {
+        console.log('⚠️ Tracking stopped unexpectedly, restarting...');
+        await startLocationTracking(driverId);
+      } else {
+        console.log('✅ Tracking still active');
+      }
+    }
+  }
+};
+
 // Restore tracking if needed (after app restart)
 export const restoreTrackingIfNeeded = async (driverId: string): Promise<void> => {
   try {
+    const shouldBeTracking = await AsyncStorage.getItem(TRACKING_ACTIVE_KEY);
     const isCurrentlyTracking = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING_TASK);
     
-    if (!isCurrentlyTracking) {
-      console.log('Restoring location tracking...');
+    if (shouldBeTracking === 'true' && !isCurrentlyTracking) {
+      console.log('🔄 Restoring location tracking after app restart...');
       await startLocationTracking(driverId);
+    } else if (isCurrentlyTracking) {
+      console.log('✅ Location tracking already active');
+      // Still set up app state listener
+      if (!appStateSubscription) {
+        appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
+        console.log('✅ App state listener registered');
+      }
     }
   } catch (error) {
     console.error('Error restoring tracking:', error);
