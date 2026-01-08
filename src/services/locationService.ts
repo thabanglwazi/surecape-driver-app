@@ -210,16 +210,16 @@ export const startLocationTracking = async (driverId: string): Promise<boolean> 
     // Mark tracking as active
     await AsyncStorage.setItem(TRACKING_ACTIVE_KEY, 'true');
     
-    // Start tracking with aggressive foreground service settings
+    // Start tracking with real-time settings (max 30 second intervals)
     await Location.startLocationUpdatesAsync(LOCATION_TRACKING_TASK, {
       accuracy: Location.Accuracy.BestForNavigation,
-      distanceInterval: 50, // More frequent updates
-      timeInterval: 5000, // Every 5 seconds
-      deferredUpdatesInterval: 5000,
-      deferredUpdatesDistance: 50,
+      distanceInterval: 20, // Update every 20 meters
+      timeInterval: 10000, // Update every 10 seconds (well under 30s requirement)
+      deferredUpdatesInterval: 10000, // Max 10 seconds between updates
+      deferredUpdatesDistance: 20, // Max 20 meters between updates
       foregroundService: {
         notificationTitle: '🚗 SureCape Driver - On Trip',
-        notificationBody: 'Tracking your location. Do not dismiss this notification.',
+        notificationBody: 'Tracking your location in real-time. Do not dismiss.',
         notificationColor: '#008080',
         killServiceOnDestroy: false, // Keep service alive
       },
