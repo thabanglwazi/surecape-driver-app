@@ -81,8 +81,8 @@ const TripDetailScreen = () => {
             try {
               await driverService.updateTripStatus(tripId, newStatus);
               
-              // Start location tracking when trip is accepted
-              if (newStatus === 'accepted' && driver?.id) {
+              // Start location tracking when trip is accepted (status becomes 'confirmed' in DB)
+              if ((newStatus === 'accepted' || newStatus === 'confirmed') && driver?.id) {
                 console.log('🎯 Trip accepted - starting location tracking');
                 await startLocationTracking(driver.id);
               }
