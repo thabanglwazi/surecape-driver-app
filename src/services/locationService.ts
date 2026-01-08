@@ -180,19 +180,23 @@ export const startLocationTracking = async (driverId: string): Promise<boolean> 
     // Save driver ID to AsyncStorage for background task
     await AsyncStorage.setItem(DRIVER_ID_KEY, driverId);
     
-    // Start tracking with foreground service
+    // Start tracking with aggressive foreground service settings
     await Location.startLocationUpdatesAsync(LOCATION_TRACKING_TASK, {
       accuracy: Location.Accuracy.BestForNavigation,
-      distanceInterval: 100,
-      timeInterval: 10000,
+      distanceInterval: 50, // More frequent updates
+      timeInterval: 5000, // Every 5 seconds
+      deferredUpdatesInterval: 5000,
+      deferredUpdatesDistance: 50,
       foregroundService: {
         notificationTitle: '🚗 SureCape Driver - On Trip',
-        notificationBody: 'Tracking your location',
+        notificationBody: 'Tracking your location. Do not dismiss this notification.',
         notificationColor: '#008080',
+        killServiceOnDestroy: false, // Keep service alive
       },
       activityType: Location.ActivityType.AutomotiveNavigation,
-      pausesUpdatesAutomatically: false,
+      pausesUpdatesAutomatically: false, // Never pause
       showsBackgroundLocationIndicator: true,
+      mayShowUserSettingsDialog: false,
     });
 
     console.log('✅ Location tracking started');
