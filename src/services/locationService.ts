@@ -10,6 +10,7 @@ const TRACKING_ACTIVE_KEY = '@tracking_active';
 
 // App state subscription for monitoring lifecycle
 let appStateSubscription: any = null;
+let lastAppState: AppStateStatus = 'active';
 
 // Interface for location update
 interface LocationUpdate {
@@ -292,24 +293,49 @@ export const stopLocationTracking = async (): Promise<void> => {
 
 // Handle app state changes to restart tracking if needed
 const handleAppStateChange = async (nextAppState: AppStateStatus) => {
-  console.log('📱 App state changed to:', nextAppState);
+  console.log(`📱 App state: ${lastAppState} → ${nextAppState}`);
+  
+  // Detect wake from sleep: inactive/background → active
+  const isWakingUp = (lastAppState === 'inactive' || lastAppState === 'background') && nextAppState === 'active';
   
   if (nextAppState === 'active') {
-    // App came to foreground, check if tracking should be active
+    // App came to foreground or device woke from sleep
     const shouldBeTracking = await AsyncStorage.getItem(TRACKING_ACTIVE_KEY);
     const driverId = await AsyncStorage.getItem(DRIVER_ID_KEY);
     
     if (shouldBeTracking === 'true' && driverId) {
-      const isCurrentlyTracking = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING_TASK);
-      
-      if (!isCurrentlyTracking) {
-        console.log('⚠️ Tracking stopped unexpectedly, restarting...');
-        await startLocationTracking(driverId);
+      if (isWakingUp) {
+        console.log('🔄 Device woke from sleep - forcing tracking refresh...');
+        // Stop and restart to refresh the service
+        try {
+          const isCurrentlyTracking = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING_TASK);
+          if (isCurrentlyTracking) {
+            await Location.stopLocationUpdatesAsync(LOCATION_TRACKING_TASK);
+            console.log('⏸️ Stopped tracking for refresh');
+          }
+          // Wait a moment then restart
+          await new Promise(resolve => setTimeout(resolve, 500));
+          await startLocationTracking(driverId);
+          console.log('✅ Tracking refreshed after wake');
+        } catch (err) {
+          console.error('❌ Error refreshing tracking:', err);
+        }
       } else {
-        console.log('✅ Tracking still active');
+        // Regular foreground check
+        const isCurrentlyTracking = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING_TASK);
+        
+        if (!isCurrentlyTracking) {
+          console.log('⚠️ Tracking stopped unexpectedly, restarting...');
+          await startLocationTracking(driverId);
+        } else {
+          console.log('✅ Tracking still active');
+        }
       }
     }
   }
+  
+  // Update last state
+  lastAppState = nextAppState;
 };
 
 // Restore tracking if needed (after app restart)
