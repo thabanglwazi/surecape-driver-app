@@ -1,8 +1,10 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 
 const LOCATION_TRACKING_TASK = 'background-location-tracking';
+const DRIVER_ID_KEY = '@current_driver_id';
 
 // Interface for location update
 interface LocationUpdate {
@@ -17,30 +19,49 @@ interface LocationUpdate {
 
 // Define the background location task
 TaskManager.defineTask(LOCATION_TRACKING_TASK, async ({ data, error }) => {
+  console.log('🔵 BACKGROUND TASK TRIGGERED');
+  
   if (error) {
-    console.error('Background location task error:', error);
+    console.error('❌ Background location error:', error);
     return;
   }
 
   if (data) {
     const { locations } = data as { locations: Location.LocationObject[] };
     const location = locations[0];
+    console.log('📍 Location received:', location ? `${location.coords.latitude}, ${location.coords.longitude}` : 'null');
 
     if (location) {
       try {
-        // Get driver ID from storage or session
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (!sessionData.session) return;
+        // Try to get driver ID from AsyncStorage first
+        let driverId = await AsyncStorage.getItem(DRIVER_ID_KEY);
+        console.log('👤 Driver ID from storage:', driverId);
+        
+        // If not in storage, try to get from session (app is open)
+        if (!driverId) {
+          console.log('⚠️ No driver ID in storage, fetching from session...');
+          const { data: sessionData } = await supabase.auth.getSession();
+          if (sessionData.session) {
+            const { data: driverData } = await supabase
+              .from('drivers')
+              .select('id')
+              .eq('email', sessionData.session.user.email)
+              .single();
+            
+            if (driverData?.id) {
+              driverId = driverData.id;
+              console.log('✅ Driver ID fetched from DB:', driverId);
+              // Save for next time
+              await AsyncStorage.setItem(DRIVER_ID_KEY, driverId);
+            }
+          }
+        }
 
-        const { data: driverData } = await supabase
-          .from('drivers')
-          .select('id')
-          .eq('email', sessionData.session.user.email)
-          .single();
-
-        if (driverData) {
-          // Update driver location in database
-          await updateDriverLocation(driverData.id, location);
+        if (driverId) {
+          console.log('💾 Updating location in database...');
+          await updateDriverLocation(driverId, location);
+        } else {
+          console.error('❌ No driver ID available');
         }
       } catch (err) {
         console.error('Error updating location:', err);
@@ -140,9 +161,10 @@ export const checkLocationPermissions = async (): Promise<{
 // Start background location tracking
 export const startLocationTracking = async (driverId: string): Promise<boolean> => {
   try {
+    console.log('Starting location tracking for driver:', driverId);
+    
     // Check if already tracking
     const isTracking = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING_TASK);
-    
     if (isTracking) {
       console.log('Location tracking already active');
       return true;
@@ -151,28 +173,51 @@ export const startLocationTracking = async (driverId: string): Promise<boolean> 
     // Check permissions
     const permissions = await checkLocationPermissions();
     if (!permissions.foreground || !permissions.background) {
-      console.log('Missing location permissions');
+      console.error('Missing location permissions', permissions);
       return false;
     }
 
-    // Start tracking with high accuracy
+    // Save driver ID to AsyncStorage for background task
+    await AsyncStorage.setItem(DRIVER_ID_KEY, driverId);
+    
+    // Start tracking with foreground service
     await Location.startLocationUpdatesAsync(LOCATION_TRACKING_TASK, {
       accuracy: Location.Accuracy.BestForNavigation,
-      distanceInterval: 50, // Update every 50 meters
-      timeInterval: 30000, // Update every 30 seconds
+      distanceInterval: 100,
+      timeInterval: 10000,
       foregroundService: {
-        notificationTitle: 'SureCape Driver',
-        notificationBody: 'Location tracking is active',
-        notificationColor: '#134e5e',
+        notificationTitle: '🚗 SureCape Driver - On Trip',
+        notificationBody: 'Tracking your location',
+        notificationColor: '#008080',
       },
+      activityType: Location.ActivityType.AutomotiveNavigation,
       pausesUpdatesAutomatically: false,
       showsBackgroundLocationIndicator: true,
     });
 
-    console.log('✅ Background location tracking started');
+    console.log('✅ Location tracking started');
+    
+    // Verify tracking actually started
+    setTimeout(async () => {
+      const isActive = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING_TASK);
+      console.log('🔍 Tracking status after 2s:', isActive ? 'ACTIVE ✅' : 'INACTIVE ❌');
+      
+      // Get current location to test database connection
+      try {
+        const currentLoc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+        console.log('📍 Test location:', currentLoc.coords.latitude, currentLoc.coords.longitude);
+        await updateDriverLocation(driverId, currentLoc);
+        console.log('✅ Test location save successful');
+      } catch (testErr) {
+        console.error('❌ Test location failed:', testErr);
+      }
+    }, 2000);
+    
     return true;
   } catch (error) {
-    console.error('Error starting location tracking:', error);
+    console.error('❌ Error starting location tracking:', error);
     return false;
   }
 };
@@ -181,13 +226,28 @@ export const startLocationTracking = async (driverId: string): Promise<boolean> 
 export const stopLocationTracking = async (): Promise<void> => {
   try {
     const isTracking = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING_TASK);
-    
     if (isTracking) {
       await Location.stopLocationUpdatesAsync(LOCATION_TRACKING_TASK);
+      await AsyncStorage.removeItem(DRIVER_ID_KEY);
       console.log('Location tracking stopped');
     }
   } catch (error) {
     console.error('Error stopping location tracking:', error);
+  }
+};
+
+// Restore tracking if needed (after app restart)
+// Restore tracking if needed (after app restart)
+export const restoreTrackingIfNeeded = async (driverId: string): Promise<void> => {
+  try {
+    const isCurrentlyTracking = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING_TASK);
+    
+    if (!isCurrentlyTracking) {
+      console.log('Restoring location tracking...');
+      await startLocationTracking(driverId);
+    }
+  } catch (error) {
+    console.error('Error restoring tracking:', error);
   }
 };
 

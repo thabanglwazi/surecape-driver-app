@@ -29,7 +29,11 @@
       "infoPlist": {
         "NSLocationAlwaysAndWhenInUseUsageDescription": "SureCape Driver needs your location to track trips, provide accurate ETAs to customers, and optimize driver dispatch.",
         "NSLocationWhenInUseUsageDescription": "SureCape Driver needs your location to track trips and provide accurate ETAs to customers.",
-        "UIBackgroundModes": ["location"]
+        "UIBackgroundModes": [
+          "location",
+          "location"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -38,6 +42,7 @@
         "backgroundColor": "#008080"
       },
       "package": "com.surecape.driver",
+      "versionCode": 3,
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
@@ -45,16 +50,25 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
-        "FOREGROUND_SERVICE_LOCATION"
-      ]
+        "FOREGROUND_SERVICE_LOCATION",
+        "POST_NOTIFICATIONS",
+        "WAKE_LOCK",
+        "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "YOUR_GOOGLE_MAPS_API_KEY"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/images/favicon.ico"
     },
     "extra": {
       "eas": {
-        "projectId": "surecape-driver-app"
+        "projectId": "de814fef-7748-497a-98ce-ecd546c5c56e"
       }
-    }
+    },
+    "owner": "thabaglwazi"
   }
 }

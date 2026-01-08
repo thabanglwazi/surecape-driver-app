@@ -2,6 +2,12 @@ import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
+import { sendDriverConfirmationEmail, sendTripCompletionEmail } from './emailService';
+import { 
+  sendTripConfirmationNotification, 
+  sendTripStartedNotification, 
+  sendTripCompletedNotification 
+} from './whatsappService';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -303,10 +309,10 @@ export const driverService = {
     console.log('Notes:', notes);
     
     // Map mobile app statuses to database statuses
-    // Database only has: assigned, confirmed, completed, cancelled
+    // Database has: assigned, confirmed, in_progress, completed, cancelled
     const statusMap: { [key: string]: string } = {
       'accepted': 'confirmed',
-      'started': 'confirmed',  // Keep as confirmed, no intermediate status
+      'started': 'in_progress',
       'completed': 'completed',
       'declined': 'cancelled'
     };
@@ -314,10 +320,18 @@ export const driverService = {
     const dbStatus = statusMap[status.toLowerCase().trim()] || status;
     console.log('Mapped DB Status:', dbStatus, 'Type:', typeof dbStatus);
     
+    // Save the original status for notification logic
+    const originalStatus = status.toLowerCase().trim();
+    
     const updateData: any = { status: dbStatus };
     
     if (notes) {
       updateData.notes = notes;
+    }
+    
+    // Add timestamps based on status
+    if (originalStatus === 'completed') {
+      updateData.completed_at = new Date().toISOString();
     }
 
     console.log('Update data:', JSON.stringify(updateData));
@@ -345,16 +359,30 @@ export const driverService = {
     console.log('=== UPDATE SUCCESS ===');
     console.log('Updated status:', data.status);
     
-    // Send email notification based on status change
-    console.log('=== EMAIL NOTIFICATION ===');
-    console.log('Checking email for status:', status);
+    // Also update the booking status to match
+    if (data.booking_id) {
+      const now = new Date().toISOString();
+      const { error: bookingError } = await supabase
+        .from('bookings')
+        .update({ 
+          status: dbStatus,
+          updated_at: now
+        })
+        .eq('id', data.booking_id);
+        
+      if (bookingError) {
+        console.error('Failed to update booking status:', bookingError);
+      } else {
+        console.log('✅ Booking status also updated to:', dbStatus);
+      }
+    }
+    
+    // Send notifications (Email + WhatsApp) based on status change
+    console.log('=== SENDING NOTIFICATIONS ===');
+    console.log('Checking notifications for status:', status);
     try {
-      // Import emailService dynamically to avoid circular dependency
-      const { sendDriverConfirmationEmail, sendTripCompletionEmail } = await import('./emailService');
-      console.log('Email service imported successfully');
-      
       // Get full trip details with locations
-      console.log('Fetching trip details for email...');
+      console.log('Fetching trip details for notifications...');
       const tripWithLocations = await this.getTripById(tripId);
       console.log('Trip details fetched:', {
         hasBooking: !!tripWithLocations.booking,
@@ -366,6 +394,7 @@ export const driverService = {
       // Customer data is in trip_details.customerInfo, not a separate table
       const customerEmail = tripWithLocations.booking?.trip_details?.customerInfo?.email || tripWithLocations.booking?.customer?.email;
       const customerName = tripWithLocations.booking?.trip_details?.customerInfo?.name || tripWithLocations.booking?.customer?.name || 'Valued Customer';
+      const customerPhone = tripWithLocations.booking?.trip_details?.customerInfo?.phone || tripWithLocations.booking?.customer?.phone || '';
       
       // Include selected vehicle in driver data
       const selectedVehicle = tripWithLocations.selected_vehicles?.[0];
@@ -375,21 +404,23 @@ export const driverService = {
         selectedVehicle: selectedVehicle
       };
       
-      console.log('Driver data for email:', {
-        name: driverData.full_name,
-        phone: driverData.phone,
-        hasVehicle: !!selectedVehicle,
-        vehicleDetails: selectedVehicle
+      console.log('Notification recipient data:', {
+        customerName,
+        customerEmail,
+        customerPhone,
+        customerPhoneType: typeof customerPhone,
+        customerPhoneLength: customerPhone?.length,
+        driverName: driverData.full_name,
+        driverPhone: driverData.phone,
+        hasVehicle: !!selectedVehicle
       });
       
-      if (!customerEmail) {
-        console.warn('⚠️ No customer email found, skipping email notification');
+      if (!customerEmail && !customerPhone) {
+        console.warn('⚠️ No customer contact info found, skipping notifications');
         return data;
       }
       
-      console.log('✅ Customer email found:', customerEmail);
-      
-      // Extract trip details for email
+      // Extract trip details for notifications
       const tripDetails = tripWithLocations.booking?.trip_details || {};
       const bookingData = {
         bookingId: tripWithLocations.booking?.booking_id || tripWithLocations.booking?.id,
@@ -401,6 +432,7 @@ export const driverService = {
         booking_id: tripWithLocations.booking?.booking_id,
         booking_reference: tripWithLocations.booking?.booking_id,
         trip_details: tripDetails,
+        tracking_url: tripWithLocations.booking?.tracking_url
       };
       
       console.log('Booking data prepared:', {
@@ -408,25 +440,91 @@ export const driverService = {
         hasLocations: !!(bookingData.pickupLocation && bookingData.dropoffLocation)
       });
       
-      if (status === 'accepted') {
-        console.log('🚀 Sending driver confirmation email...');
-        const result = await sendDriverConfirmationEmail(customerEmail, customerName, bookingData, driverData);
-        console.log('Email result:', result);
-      } else if (status === 'completed') {
-        console.log('🚀 Sending trip completion email...');
-        const result = await sendTripCompletionEmail(customerEmail, customerName, bookingData, driverData);
-        console.log('Email result:', result);
+      // Send notifications based on status
+      if (originalStatus === 'accepted') {
+        console.log('🚀 Sending driver confirmation notifications...');
+        
+        // Send email
+        if (customerEmail) {
+          const emailResult = await sendDriverConfirmationEmail(customerEmail, customerName, bookingData, driverData);
+          console.log('Email result:', emailResult);
+        }
+        
+        // Send WhatsApp
+        if (customerPhone && selectedVehicle) {
+          console.log('📱 About to send WhatsApp confirmation. Phone:', customerPhone, 'Vehicle:', selectedVehicle.make, selectedVehicle.model);
+          const vehicleInfo = `${selectedVehicle.make || ''} ${selectedVehicle.model || ''}`.trim() || 'Vehicle';
+          const licensePlate = selectedVehicle.license_plate || 'TBA';
+          const pickupDateTime = `${bookingData.pickupDate || ''} ${bookingData.pickupTime || ''}`.trim();
+          
+          const whatsappResult = await sendTripConfirmationNotification(
+            customerPhone,
+            customerName,
+            driverData.full_name || 'Your Driver',
+            vehicleInfo,
+            licensePlate,
+            pickupDateTime
+          );
+          console.log('WhatsApp result:', whatsappResult);
+        } else {
+          console.log('⚠️ WhatsApp not sent. Phone:', customerPhone, 'Vehicle:', !!selectedVehicle);
+        }
+        
+      } else if (originalStatus === 'started' || dbStatus === 'in_progress') {
+        console.log('🚀 Sending trip started notifications...');
+        
+        // Send WhatsApp notification for trip start
+        if (customerPhone) {
+          console.log('📱 About to send WhatsApp trip started. Phone:', customerPhone);
+          const whatsappResult = await sendTripStartedNotification(
+            customerPhone,
+            customerName,
+            driverData.full_name || 'Your Driver',
+            driverData.phone || '',
+            bookingData.tracking_url
+          );
+          console.log('WhatsApp result:', whatsappResult);
+        } else {
+          console.log('⚠️ WhatsApp trip started not sent. Phone:', customerPhone);
+        }
+        
+      } else if (originalStatus === 'completed' || dbStatus === 'completed') {
+        console.log('🚀 Sending trip completion notifications...');
+        
+        // Send email
+        if (customerEmail) {
+          const emailResult = await sendTripCompletionEmail(customerEmail, customerName, bookingData, driverData);
+          console.log('Email result:', emailResult);
+        }
+        
+        // Send WhatsApp
+        if (customerPhone) {
+          console.log('📱 About to send WhatsApp completion. Phone:', customerPhone);
+          const totalAmount = bookingData.total_amount ? `R${parseFloat(bookingData.total_amount).toFixed(2)}` : undefined;
+          const whatsappResult = await sendTripCompletedNotification(
+            customerPhone,
+            customerName,
+            bookingData.dropoffLocation || 'Your destination',
+            totalAmount
+          );
+          console.log('WhatsApp result:', whatsappResult);
+        } else {
+          console.log('⚠️ WhatsApp completion not sent. Phone:', customerPhone);
+        }
+        
       } else {
-        console.log('ℹ️ No email sent for status:', status);
+        console.log('ℹ️ No notifications sent for status:', status);
       }
-    } catch (emailError: any) {
-      console.error('❌ Email notification failed (non-blocking):', emailError);
-      console.error('Error details:', emailError?.message, emailError?.stack);
-      // Don't throw - email failure shouldn't block status update
+    } catch (notificationError: any) {
+      console.error('❌ Notification failed (non-blocking):', notificationError);
+      console.error('Error details:', notificationError?.message, notificationError?.stack);
+      // Don't throw - notification failure shouldn't block status update
     }
     
     return data;
   },
+
+  // Accept assignment
 
   // Accept assignment
   async acceptAssignment(assignmentId: string, notes?: string) {

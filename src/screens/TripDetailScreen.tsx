@@ -13,12 +13,15 @@ import {
 import { useRoute, RouteProp, useNavigation } from '@react-navigation/native';
 import { driverService, supabase } from '../services/supabase';
 import { Trip, RootStackParamList } from '../types';
+import { startLocationTracking } from '../services/locationService';
+import { useAuth } from '../contexts/AuthContext';
 
 type TripDetailRouteProp = RouteProp<RootStackParamList, 'TripDetail'>;
 
 const TripDetailScreen = () => {
   const route = useRoute<TripDetailRouteProp>();
   const navigation = useNavigation();
+  const { driver } = useAuth();
   const { tripId } = route.params;
   const [trip, setTrip] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -77,6 +80,12 @@ const TripDetailScreen = () => {
             setUpdating(true);
             try {
               await driverService.updateTripStatus(tripId, newStatus);
+              
+              // Start location tracking when trip is accepted
+              if (newStatus === 'accepted' && driver?.id) {
+                console.log('🎯 Trip accepted - starting location tracking');
+                await startLocationTracking(driver.id);
+              }
               
               // If trip is completed or cancelled, navigate back to refresh the lists
               if (newStatus === 'completed' || newStatus === 'declined') {
@@ -157,6 +166,12 @@ const TripDetailScreen = () => {
 
       // Reload trip data
       await loadTripDetails();
+      
+      // Start location tracking when trip begins
+      if (driver?.id) {
+        console.log('🎯 Starting location tracking for trip');
+        await startLocationTracking(driver.id);
+      }
       
       Alert.alert('Success', '🚗 Trip started! Customer has been notified.');
       

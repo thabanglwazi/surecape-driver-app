@@ -37,13 +37,16 @@ export interface Customer {
   name: string;
   surname?: string;
   email: string;
-  phone: string;  // Changed from cell to match DB
-  cell?: string;  // Keep for backward compatibility
+  phone: string;
+  cell?: string;
   is_guest?: boolean;
   role?: 'customer' | 'admin' | 'driver';
   created_at: string;
 }
-booking_id?: string;  // Human-readable ID like "BOOK-001"
+
+export interface Booking {
+  id: string;
+  booking_id?: string;
   booking_reference?: string;
   customer_id: string;
   booking_type: 'shuttle' | 'transfer' | 'chauffeur';
@@ -54,34 +57,30 @@ booking_id?: string;  // Human-readable ID like "BOOK-001"
   pickup_time: string;
   number_of_passengers: number;
   vehicle_type: string;
-  total_amount: number;  // Changed from total_price to match DB
-  total_price?: number;  // Keep for backward compatibility
+  total_amount: number;
+  total_price?: number;
   status: 'pending' | 'confirmed' | 'assigned' | 'in_progress' | 'completed' | 'cancelled';
   special_requests?: string;
-  trip_details?: any;  // JSONB field with additional trip info
+  trip_details?: any;
   created_at: string;
-  updated_at?e: number;
-  status: 'pending' | 'confirmed' | 'assigned' | 'in_progress' | 'completed' | 'cancelled';
-  special_requests?: string;
-  created_at: string;
+  updated_at?: string;
   customer?: Customer;
 }
 
 export interface DriverAssignment {
   id: string;
+  booking_id: string;
   driver_id: string;
-  selected_vehicle_id?: string[];  // Array of vehicle IDs from driver's fleet
+  selected_vehicle_id?: string[];
   driver?: Driver;
-  drivers?: Driver;  // Alternative field name used in some queries
+  drivers?: Driver;
   booking?: Booking;
-  bookings?: Booking;  // Alternative field name used in some queries
-  selected_vehicles?: Vehicle[];  // Populated vehicles from selected_vehicle_idg;
+  bookings?: Booking;
+  selected_vehicles?: Vehicle[];
   status: 'assigned' | 'accepted' | 'declined' | 'started' | 'completed';
   started_at?: string;
   completed_at?: string;
   notes?: string;
-  driver?: Driver;
-  booking?: Booking;
 }
 
 export interface Trip extends DriverAssignment {
@@ -102,11 +101,17 @@ export type RootStackParamList = {
   TripDetail: { tripId: string };
 };
 
-export typephone: string, otp?: string) => Promise<{ needsOtp?: boolean } | 
+export type TabParamList = {
   Trips: undefined;
   History: undefined;
   Profile: undefined;
 };
+
+// User type
+export interface User {
+  id: string;
+  email: string;
+}
 
 // Auth context types
 export interface AuthContextType {

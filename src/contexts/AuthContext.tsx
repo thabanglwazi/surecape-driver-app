@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Platform, Alert, Linking } from 'react-native';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import { Platform, Alert, Linking, AppState, AppStateStatus } from 'react-native';
 import { supabase } from '../services/supabase';
 import { Driver, AuthContextType } from '../types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -9,7 +9,8 @@ import {
   startLocationTracking,
   stopLocationTracking,
   isLocationEnabled,
-} from '../services/locationServiceExpoDev';
+  restoreTrackingIfNeeded,
+} from '../services/locationService';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -17,6 +18,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<any>(null);
   const [driver, setDriver] = useState<Driver | null>(null);
   const [loading, setLoading] = useState(true);
+  const appState = useRef(AppState.currentState);
 
   console.log('===== AUTH PROVIDER RENDERING =====', { loading, hasDriver: !!driver });
 
@@ -34,6 +36,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return () => clearTimeout(timeoutId);
   }, []);
+
+  // Monitor app state changes to restore tracking
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => {
+      subscription.remove();
+    };
+  }, [driver]);
+
+  const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+    if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+      console.log('📱 App returned to foreground - checking for active trips');
+      if (driver?.id) {
+        await checkAndRestoreTracking(driver.id);
+      }
+    }
+    appState.current = nextAppState;
+  };
+
+  const checkAndRestoreTracking = async (driverId: string) => {
+    try {
+      // Check if driver has any active trips (confirmed or in_progress)
+      const { data: activeTrips, error } = await supabase
+        .from('driver_assignments')
+        .select('id, status')
+        .eq('driver_id', driverId)
+        .in('status', ['confirmed', 'in_progress'])
+        .limit(1);
+
+      if (error) {
+        console.error('Error checking active trips:', error);
+        return;
+      }
+
+      if (activeTrips && activeTrips.length > 0) {
+        console.log('🚗 Active trip found, ensuring tracking is active');
+        await restoreTrackingIfNeeded(driverId);
+      } else {
+        console.log('ℹ️ No active trips, tracking not needed');
+      }
+    } catch (error) {
+      console.error('Error in checkAndRestoreTracking:', error);
+    }
+  };
 
   const checkSession = async () => {
     try {
@@ -66,6 +112,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else if (driverData) {
           console.log('Driver data loaded:', driverData.email);
           setDriver(driverData);
+          
+          // Check for active trips and restore tracking if needed
+          await checkAndRestoreTracking(driverData.id);
         }
       } else {
         console.log('No active session found');
