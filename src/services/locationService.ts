@@ -1,6 +1,7 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform, Linking, Alert } from 'react-native';
 import { supabase } from './supabase';
 
 const LOCATION_TRACKING_TASK = 'background-location-tracking';
@@ -175,6 +176,28 @@ export const startLocationTracking = async (driverId: string): Promise<boolean> 
     if (!permissions.foreground || !permissions.background) {
       console.error('Missing location permissions', permissions);
       return false;
+    }
+
+    // Request battery optimization exemption for Android
+    if (Platform.OS === 'android') {
+      const hasRequested = await AsyncStorage.getItem('@battery_exemption_requested');
+      if (!hasRequested) {
+        Alert.alert(
+          'Battery Optimization Required',
+          'For reliable GPS tracking when the phone is locked, please disable battery optimization for SureCape Driver.\n\nThis ensures location updates continue in the background.',
+          [
+            {
+              text: 'Open Settings',
+              onPress: () => Linking.openSettings(),
+            },
+            {
+              text: 'Later',
+              style: 'cancel',
+            },
+          ]
+        );
+        await AsyncStorage.setItem('@battery_exemption_requested', 'true');
+      }
     }
 
     // Save driver ID to AsyncStorage for background task
