@@ -1,8 +1,9 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform, Linking, Alert, AppState, AppStateStatus } from 'react-native';
+import { Platform, Linking, Alert, AppState, AppStateStatus, NativeModules } from 'react-native';
 import { supabase } from './supabase';
+import BatteryOptimization from 'react-native-battery-optimization-check';
 
 const LOCATION_TRACKING_TASK = 'background-location-tracking';
 const DRIVER_ID_KEY = '@current_driver_id';
@@ -185,23 +186,42 @@ export const startLocationTracking = async (driverId: string): Promise<boolean> 
 
     // Request battery optimization exemption for Android
     if (Platform.OS === 'android') {
-      const hasRequested = await AsyncStorage.getItem('@battery_exemption_requested');
-      if (!hasRequested) {
-        Alert.alert(
-          'Battery Optimization Required',
-          'For reliable GPS tracking when the phone is locked, please disable battery optimization for SureCape Driver.\n\nThis ensures location updates continue in the background.',
-          [
-            {
-              text: 'Open Settings',
-              onPress: () => Linking.openSettings(),
-            },
-            {
-              text: 'Later',
-              style: 'cancel',
-            },
-          ]
-        );
-        await AsyncStorage.setItem('@battery_exemption_requested', 'true');
+      try {
+        // Check if battery optimization is enabled
+        const isOptimizationEnabled = await BatteryOptimization.isBatteryOptimizationEnabled();
+        console.log('📊 Battery optimization enabled:', isOptimizationEnabled);
+        
+        if (isOptimizationEnabled) {
+          // Request to disable battery optimization
+          Alert.alert(
+            'Enable Unrestricted Battery',
+            'SureCape Driver needs unrestricted battery access to track your location reliably when the phone is locked.\n\nTap "Allow" on the next screen to disable battery optimization.',
+            [
+              {
+                text: 'Enable Now',
+                onPress: async () => {
+                  try {
+                    await BatteryOptimization.requestOptimization();
+                    console.log('✅ Battery optimization exemption requested');
+                  } catch (err) {
+                    console.error('❌ Failed to request exemption:', err);
+                    // Fallback to settings
+                    Linking.openSettings();
+                  }
+                },
+              },
+              {
+                text: 'Later',
+                style: 'cancel',
+                onPress: () => console.log('⚠️ User postponed battery optimization'),
+              },
+            ]
+          );
+        } else {
+          console.log('✅ Battery optimization already disabled');
+        }
+      } catch (err) {
+        console.error('❌ Error checking battery optimization:', err);
       }
     }
 
@@ -220,16 +240,9 @@ export const startLocationTracking = async (driverId: string): Promise<boolean> 
       deferredUpdatesDistance: 0, // No distance dependency for deferred updates
       foregroundService: {
         notificationTitle: '🚗 SureCape Driver - Active Trip',
-        notificationBody: 'Location tracking in progress. Keep this notification active.',
+        notificationBody: 'Location tracking in progress. This notification cannot be dismissed.',
         notificationColor: '#008080',
-        killServiceOnDestroy: false, // Keep service alive
-        ...(Platform.OS === 'android' ? {
-          // Android-specific notification settings for persistence
-          notificationPriority: 'max',
-          notificationBadgeIconType: 2, // Large icon
-          notificationCategory: 'service',
-          notificationOngoing: true, // Makes notification non-dismissible
-        } : {}),
+        killServiceOnDestroy: false, // Keep service alive even if app is swiped away
       },
       activityType: Location.ActivityType.AutomotiveNavigation,
       pausesUpdatesAutomatically: false, // Never pause
