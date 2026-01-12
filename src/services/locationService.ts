@@ -2,8 +2,8 @@ import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, Linking, Alert, AppState, AppStateStatus, NativeModules } from 'react-native';
+import * as Device from 'expo-device';
 import { supabase } from './supabase';
-import BatteryOptimization from 'react-native-battery-optimization-check';
 
 const LOCATION_TRACKING_TASK = 'background-location-tracking';
 const DRIVER_ID_KEY = '@current_driver_id';
@@ -184,45 +184,46 @@ export const startLocationTracking = async (driverId: string): Promise<boolean> 
       return false;
     }
 
-    // Request battery optimization exemption for Android
+    // Request battery optimization exemption for Android (especially Samsung)
     if (Platform.OS === 'android') {
-      try {
-        // Check if battery optimization is enabled
-        const isOptimizationEnabled = await BatteryOptimization.isBatteryOptimizationEnabled();
-        console.log('📊 Battery optimization enabled:', isOptimizationEnabled);
-        
-        if (isOptimizationEnabled) {
-          // Request to disable battery optimization
-          Alert.alert(
-            'Enable Unrestricted Battery',
-            'SureCape Driver needs unrestricted battery access to track your location reliably when the phone is locked.\n\nTap "Allow" on the next screen to disable battery optimization.',
-            [
-              {
-                text: 'Enable Now',
-                onPress: async () => {
-                  try {
-                    await BatteryOptimization.requestOptimization();
-                    console.log('✅ Battery optimization exemption requested');
-                  } catch (err) {
-                    console.error('❌ Failed to request exemption:', err);
-                    // Fallback to settings
-                    Linking.openSettings();
-                  }
-                },
-              },
-              {
-                text: 'Later',
-                style: 'cancel',
-                onPress: () => console.log('⚠️ User postponed battery optimization'),
-              },
-            ]
-          );
-        } else {
-          console.log('✅ Battery optimization already disabled');
-        }
-      } catch (err) {
-        console.error('❌ Error checking battery optimization:', err);
-      }
+      const isSamsung = Device.brand?.toLowerCase().includes('samsung') || 
+                        Device.manufacturer?.toLowerCase().includes('samsung');
+      
+      const message = isSamsung
+        ? `SAMSUNG DEVICE DETECTED\n\nFor GPS to work when locked, you MUST:\n\n1. Disable Battery Optimization\n2. Remove from "Sleeping apps" list\n3. Allow background activity\n\nTap OK to open Battery settings.`
+        : 'For reliable GPS tracking when locked, please:\n\n1. Find "SureCape Driver"\n2. Select "Unrestricted" or "Don\'t optimize"\n\nTap OK to open Battery settings.';
+      
+      Alert.alert(
+        '🔋 Battery Settings Required',
+        message,
+        [
+          {
+            text: 'Open Battery Settings',
+            onPress: async () => {
+              try {
+                await Linking.openSettings();
+                
+                // Show follow-up instructions for Samsung
+                if (isSamsung) {
+                  setTimeout(() => {
+                    Alert.alert(
+                      'Samsung Battery Steps',
+                      'In Settings:\n\n1. Go to: Battery and device care → Battery → Background usage limits\n\n2. Remove "SureCape Driver" from "Sleeping apps" and "Deep sleeping apps"\n\n3. Go back: Apps → SureCape Driver → Battery → Unrestricted\n\n4. Enable: Apps → SureCape Driver → Permissions → Location → "Allow all the time"',
+                      [{ text: 'Got it' }]
+                    );
+                  }, 2000);
+                }
+              } catch (err) {
+                console.error('Error opening settings:', err);
+              }
+            },
+          },
+          {
+            text: 'Later',
+            style: 'cancel',
+          },
+        ]
+      );
     }
 
     // Save driver ID to AsyncStorage for background task
@@ -239,10 +240,11 @@ export const startLocationTracking = async (driverId: string): Promise<boolean> 
       deferredUpdatesInterval: 10000, // Max 10 seconds between updates
       deferredUpdatesDistance: 0, // No distance dependency for deferred updates
       foregroundService: {
-        notificationTitle: '🚗 SureCape Driver - Active Trip',
-        notificationBody: 'Location tracking in progress. This notification cannot be dismissed.',
-        notificationColor: '#008080',
+        notificationTitle: '🚗 SureCape Driver - GPS Active',
+        notificationBody: 'Tracking location every 10 seconds. Keep this notification visible.',
+        notificationColor: '#FF0000',
         killServiceOnDestroy: false, // Keep service alive even if app is swiped away
+        notificationPriority: 'max',
       },
       activityType: Location.ActivityType.AutomotiveNavigation,
       pausesUpdatesAutomatically: false, // Never pause
