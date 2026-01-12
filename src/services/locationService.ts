@@ -219,10 +219,17 @@ export const startLocationTracking = async (driverId: string): Promise<boolean> 
       deferredUpdatesInterval: 10000, // Max 10 seconds between updates
       deferredUpdatesDistance: 0, // No distance dependency for deferred updates
       foregroundService: {
-        notificationTitle: '🚗 SureCape Driver - On Trip',
-        notificationBody: 'Tracking your location in real-time. Do not dismiss.',
+        notificationTitle: '🚗 SureCape Driver - Active Trip',
+        notificationBody: 'Location tracking in progress. Keep this notification active.',
         notificationColor: '#008080',
         killServiceOnDestroy: false, // Keep service alive
+        ...(Platform.OS === 'android' ? {
+          // Android-specific notification settings for persistence
+          notificationPriority: 'max',
+          notificationBadgeIconType: 2, // Large icon
+          notificationCategory: 'service',
+          notificationOngoing: true, // Makes notification non-dismissible
+        } : {}),
       },
       activityType: Location.ActivityType.AutomotiveNavigation,
       pausesUpdatesAutomatically: false, // Never pause
