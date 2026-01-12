@@ -8,6 +8,8 @@ import { supabase } from './supabase';
 const LOCATION_TRACKING_TASK = 'background-location-tracking';
 const DRIVER_ID_KEY = '@current_driver_id';
 const TRACKING_ACTIVE_KEY = '@tracking_active';
+const BATTERY_EXEMPTION_SHOWN_KEY = '@battery_exemption_shown';
+const BATTERY_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // Check once per day
 
 // App state subscription for monitoring lifecycle
 let appStateSubscription: any = null;
@@ -186,44 +188,63 @@ export const startLocationTracking = async (driverId: string): Promise<boolean> 
 
     // Request battery optimization exemption for Android (especially Samsung)
     if (Platform.OS === 'android') {
-      const isSamsung = Device.brand?.toLowerCase().includes('samsung') || 
-                        Device.manufacturer?.toLowerCase().includes('samsung');
+      // Check if we've shown the dialog recently
+      const lastShown = await AsyncStorage.getItem(BATTERY_EXEMPTION_SHOWN_KEY);
+      const now = Date.now();
       
-      const message = isSamsung
-        ? `SAMSUNG DEVICE DETECTED\n\nFor GPS to work when locked, you MUST:\n\n1. Disable Battery Optimization\n2. Remove from "Sleeping apps" list\n3. Allow background activity\n\nTap OK to open Battery settings.`
-        : 'For reliable GPS tracking when locked, please:\n\n1. Find "SureCape Driver"\n2. Select "Unrestricted" or "Don\'t optimize"\n\nTap OK to open Battery settings.';
+      // Only show dialog if:
+      // 1. Never shown before, OR
+      // 2. Last shown more than 24 hours ago
+      const shouldShow = !lastShown || (now - parseInt(lastShown)) > BATTERY_CHECK_INTERVAL;
       
-      Alert.alert(
-        '🔋 Battery Settings Required',
-        message,
-        [
-          {
-            text: 'Open Battery Settings',
-            onPress: async () => {
-              try {
-                await Linking.openSettings();
-                
-                // Show follow-up instructions for Samsung
-                if (isSamsung) {
-                  setTimeout(() => {
-                    Alert.alert(
-                      'Samsung Battery Steps',
-                      'In Settings:\n\n1. Go to: Battery and device care → Battery → Background usage limits\n\n2. Remove "SureCape Driver" from "Sleeping apps" and "Deep sleeping apps"\n\n3. Go back: Apps → SureCape Driver → Battery → Unrestricted\n\n4. Enable: Apps → SureCape Driver → Permissions → Location → "Allow all the time"',
-                      [{ text: 'Got it' }]
-                    );
-                  }, 2000);
+      if (shouldShow) {
+        const isSamsung = Device.brand?.toLowerCase().includes('samsung') || 
+                          Device.manufacturer?.toLowerCase().includes('samsung');
+        
+        const message = isSamsung
+          ? `SAMSUNG DEVICE: GPS will NOT work when locked unless you complete these steps:\n\n1. Battery and device care → Battery\n2. Background usage limits\n3. Remove SureCape Driver from "Sleeping apps"\n4. Apps → SureCape Driver → Battery → Unrestricted\n\nThis dialog shows once per day.`
+          : 'GPS requires battery exemption:\n\n1. Find "SureCape Driver"\n2. Select "Unrestricted"\n\nThis dialog shows once per day.';
+        
+        Alert.alert(
+          '🔋 One-Time Battery Setup',
+          message,
+          [
+            {
+              text: 'Open Settings Now',
+              onPress: async () => {
+                try {
+                  // Save that we showed the dialog
+                  await AsyncStorage.setItem(BATTERY_EXEMPTION_SHOWN_KEY, now.toString());
+                  await Linking.openSettings();
+                  
+                  // Show follow-up for Samsung only once
+                  if (isSamsung) {
+                    setTimeout(() => {
+                      Alert.alert(
+                        '📱 Samsung Quick Guide',
+                        '1. Battery → Background usage limits\n2. Remove from Sleeping apps\n3. Apps → SureCape → Battery → Unrestricted',
+                        [{ text: 'Done' }]
+                      );
+                    }, 1500);
+                  }
+                } catch (err) {
+                  console.error('Error opening settings:', err);
                 }
-              } catch (err) {
-                console.error('Error opening settings:', err);
-              }
+              },
             },
-          },
-          {
-            text: 'Later',
-            style: 'cancel',
-          },
-        ]
-      );
+            {
+              text: 'Already Done',
+              onPress: async () => {
+                // Mark as shown so we don't keep prompting
+                await AsyncStorage.setItem(BATTERY_EXEMPTION_SHOWN_KEY, now.toString());
+              },
+            },
+          ],
+          { cancelable: false } // Don't allow dismissing without choice
+        );
+      } else {
+        console.log('⏭️ Battery dialog shown recently, skipping');
+      }
     }
 
     // Save driver ID to AsyncStorage for background task
