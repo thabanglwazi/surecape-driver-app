@@ -119,11 +119,26 @@ const TripDetailScreen = () => {
   };
 
   const handleNavigate = (location: string, locationName?: string) => {
-    // Use in-app navigation instead of external maps
-    navigation.navigate('Navigation' as never, { 
-      destination: location,
-      destinationName: locationName 
-    } as never);
+    // Check if location has coordinates
+    const hasCoordinates = /(-?\d+\.\d+),\s*(-?\d+\.\d+)/.test(location);
+    
+    if (hasCoordinates) {
+      // Use in-app navigation if coordinates are present
+      navigation.navigate('Navigation' as never, { 
+        destination: location,
+        destinationName: locationName 
+      } as never);
+    } else {
+      // Use external maps for plain addresses
+      const url = Platform.OS === 'ios'
+        ? `maps://app?daddr=${encodeURIComponent(location)}`
+        : `google.navigation:q=${encodeURIComponent(location)}`;
+      
+      Linking.openURL(url).catch(() => {
+        // Fallback to browser-based Google Maps
+        Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(location)}`);
+      });
+    }
   };
 
   const startTrip = async () => {
