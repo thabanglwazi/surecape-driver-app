@@ -155,19 +155,19 @@ const NavigationScreen = () => {
       
       let location = null;
       try {
-        debugLog('Requesting location with 10s timeout');
-        // Add timeout to location request
+        debugLog('Requesting location with 15s timeout');
+        // Add timeout to location request (increased to 15 seconds)
         const locationPromise = Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
-          maximumAge: 10000,
-          timeout: 10000,
+          maximumAge: 30000, // Accept location up to 30 seconds old
+          timeout: 15000,
         });
         
         const timeoutPromise = new Promise<Location.LocationObject | null>((resolve) => {
           setTimeout(() => {
-            debugLog('Location request timed out after 10s', true);
+            debugLog('Location request timed out after 15s', true);
             resolve(null);
-          }, 10000);
+          }, 15000);
         });
         
         location = await Promise.race([locationPromise, timeoutPromise]);
@@ -177,7 +177,21 @@ const NavigationScreen = () => {
         }
       } catch (locError) {
         debugLog(`Error getting location: ${locError}`, true);
-        location = null;
+        // Try with lower accuracy as fallback
+        try {
+          debugLog('Trying fallback with lower accuracy');
+          location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Low,
+            maximumAge: 60000, // Accept location up to 1 minute old
+            timeout: 10000,
+          });
+          if (location) {
+            debugLog(`Fallback location obtained: ${location.coords.latitude}, ${location.coords.longitude}`);
+          }
+        } catch (fallbackError) {
+          debugLog(`Fallback location also failed: ${fallbackError}`, true);
+          location = null;
+        }
       }
       
       if (!location) {
@@ -207,11 +221,11 @@ const NavigationScreen = () => {
         debugLog('Both parsing and geocoding failed', true);
         Alert.alert(
           'Location Error', 
-          'Could not find coordinates for this location. The address may need to be more specific, or you can open in Google Maps.',
+          `Could not find coordinates for: "${destination}"\n\nWould you like to:\n• Try external maps\n• Skip navigation and go back`,
           [
-            { text: 'Cancel', onPress: () => navigation.goBack() },
+            { text: 'Skip Navigation', onPress: () => navigation.goBack() },
             { 
-              text: 'Open Google Maps', 
+              text: 'Open External Maps', 
               onPress: () => {
                 const url = Platform.OS === 'ios'
                   ? `maps://app?daddr=${encodeURIComponent(destination)}`
@@ -373,20 +387,48 @@ const NavigationScreen = () => {
 
   const parseCoordinates = (locationString: string): RouteCoordinates | null => {
     try {
+      debugLog(`Trying to parse coordinates from: "${locationString}"`);
+      
+      // Handle object-like strings (JSON)
+      if (locationString.includes('{') || locationString.includes('lat') || locationString.includes('lng')) {
+        try {
+          const parsed = JSON.parse(locationString);
+          if (parsed.lat && parsed.lng) {
+            debugLog(`Found lat/lng in JSON: ${parsed.lat}, ${parsed.lng}`);
+            return { latitude: parseFloat(parsed.lat), longitude: parseFloat(parsed.lng) };
+          }
+          if (parsed.latitude && parsed.longitude) {
+            debugLog(`Found latitude/longitude in JSON: ${parsed.latitude}, ${parsed.longitude}`);
+            return { latitude: parseFloat(parsed.latitude), longitude: parseFloat(parsed.longitude) };
+          }
+        } catch (e) {
+          debugLog('Failed to parse as JSON, trying other methods');
+        }
+      }
+      
       // Try to extract coordinates from string (format: "lat,lng" or "address with lat,lng")
       const coordsMatch = locationString.match(/(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
       if (coordsMatch) {
-        return {
-          latitude: parseFloat(coordsMatch[1]),
-          longitude: parseFloat(coordsMatch[2]),
-        };
+        const lat = parseFloat(coordsMatch[1]);
+        const lng = parseFloat(coordsMatch[2]);
+        debugLog(`Found coordinates in string: ${lat}, ${lng}`);
+        return { latitude: lat, longitude: lng };
       }
       
-      // If no coordinates found, return null (will need geocoding or fallback)
-      console.log('No coordinates found in:', locationString);
+      // Check for common coordinate patterns like "lat: -26.123, lng: 28.456"
+      const latLngMatch = locationString.match(/lat:\s*(-?\d+\.\d+).*?lng:\s*(-?\d+\.\d+)/);
+      if (latLngMatch) {
+        const lat = parseFloat(latLngMatch[1]);
+        const lng = parseFloat(latLngMatch[2]);
+        debugLog(`Found lat/lng pattern: ${lat}, ${lng}`);
+        return { latitude: lat, longitude: lng };
+      }
+      
+      // If no coordinates found, this will need geocoding
+      debugLog('No coordinates found in string - will need geocoding');
       return null;
     } catch (error) {
-      console.error('Error parsing coordinates:', error);
+      debugLog(`Error parsing coordinates: ${error}`, true);
       return null;
     }
   };
@@ -394,17 +436,21 @@ const NavigationScreen = () => {
   const geocodeAddress = async (address: string): Promise<RouteCoordinates | null> => {
     try {
       setIsGeocoding(true);
-      debugLog(`Starting geocoding for: ${address}`);
+      debugLog(`Starting geocoding for: "${address}"`);
       
-      // Add timeout
+      // Clean up the address for better geocoding
+      const cleanAddress = address.replace(/[{}"]/g, '').trim();
+      debugLog(`Cleaned address: "${cleanAddress}"`);
+      
+      // Add timeout (15 seconds for better chance of success)
       const timeoutPromise = new Promise<null>((resolve) => {
         setTimeout(() => {
-          debugLog('Geocoding timed out after 10s', true);
+          debugLog('Geocoding timed out after 15s', true);
           resolve(null);
-        }, 10000);
+        }, 15000);
       });
       
-      const geocodePromise = Location.geocodeAsync(address);
+      const geocodePromise = Location.geocodeAsync(cleanAddress);
       
       const geocoded = await Promise.race([geocodePromise, timeoutPromise]);
       
@@ -416,7 +462,21 @@ const NavigationScreen = () => {
         };
       }
       
-      debugLog('Geocoding returned no results', true);
+      debugLog('Geocoding returned no results - trying alternative', true);
+      
+      // Try adding South Africa as fallback
+      if (!cleanAddress.toLowerCase().includes('south africa')) {
+        debugLog(`Trying geocoding with South Africa: "${cleanAddress}, South Africa"`);
+        const saGeocode = await Location.geocodeAsync(`${cleanAddress}, South Africa`);
+        if (saGeocode && saGeocode.length > 0) {
+          debugLog(`SA geocoding successful: ${saGeocode[0].latitude}, ${saGeocode[0].longitude}`);
+          return {
+            latitude: saGeocode[0].latitude,
+            longitude: saGeocode[0].longitude,
+          };
+        }
+      }
+      
       return null;
     } catch (error) {
       debugLog(`Geocoding error: ${error}`, true);
