@@ -503,21 +503,22 @@ const styles = StyleSheet.create({
   },
   routeDetails: {
     flex: 1,
-    gap: 20,
   },
   locationBlock: {
-    gap: 8,
+    marginVertical: 10,
   },
   locationLabel: {
     fontSize: 12,
     fontWeight: '700',
     color: '#6c757d',
     letterSpacing: 0.5,
+    marginBottom: 8,
   },
   locationText: {
     fontSize: 15,
     color: '#1a1a1a',
     lineHeight: 22,
+    marginBottom: 8,
   },
   navigateLink: {
     paddingVertical: 8,
@@ -548,16 +549,17 @@ const styles = StyleSheet.create({
   },
   customerDetails: {
     flex: 1,
-    gap: 4,
   },
   customerName: {
     fontSize: 18,
     fontWeight: '700',
     color: '#1a1a1a',
+    marginBottom: 4,
   },
   customerEmail: {
     fontSize: 14,
     color: '#6c757d',
+    marginBottom: 4,
   },
   customerPhone: {
     fontSize: 15,
@@ -578,8 +580,8 @@ const styles = StyleSheet.create({
   detailsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
     marginBottom: 16,
+    marginHorizontal: -6,
   },
   detailBox: {
     flex: 1,
@@ -587,6 +589,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
     padding: 12,
     borderRadius: 12,
+    margin: 6,
   },
   detailLabel: {
     fontSize: 12,
@@ -629,12 +632,12 @@ const styles = StyleSheet.create({
   actionsContainer: {
     padding: 16,
     paddingBottom: 32,
-    gap: 12,
   },
   primaryButton: {
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,

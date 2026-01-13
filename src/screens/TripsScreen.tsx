@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 24,
   },
   headerContent: {
-    gap: 4,
+    marginBottom: 4,
   },
   greetingText: {
     fontSize: 16,
@@ -173,7 +173,6 @@ const styles = StyleSheet.create({
   tripCountContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
   },
   tripCountBadge: {
     backgroundColor: '#ffffff',
@@ -182,6 +181,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,

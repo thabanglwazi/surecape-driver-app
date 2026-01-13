@@ -233,11 +233,11 @@ const styles = StyleSheet.create({
   infoItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
     flex: 1,
   },
   infoIcon: {
     fontSize: 16,
+    marginRight: 8,
   },
   infoValue: {
     fontSize: 14,
