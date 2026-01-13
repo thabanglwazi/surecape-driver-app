@@ -37,6 +37,7 @@ const NavigationScreen = () => {
   const [distanceToDestination, setDistanceToDestination] = useState<number>(0);
   const [hasArrived, setHasArrived] = useState(false);
   const [trip, setTrip] = useState<any>(null);
+  const [isGeocoding, setIsGeocoding] = useState(false);
   const mapRef = useRef<MapView>(null);
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
 
@@ -113,14 +114,15 @@ const NavigationScreen = () => {
       
       // If no coordinates found, try geocoding the address
       if (!destCoords) {
-        console.log('Attempting to geocode address:', destination);
+        console.log('No coordinates in destination, attempting geocoding...');
         destCoords = await geocodeAddress(destination);
       }
       
       if (!destCoords) {
+        console.log('Both parsing and geocoding failed');
         Alert.alert(
           'Location Error', 
-          'Could not find coordinates for this location. Would you like to open in Google Maps instead?',
+          'Could not find coordinates for this location. The address may need to be more specific, or you can open in Google Maps.',
           [
             { text: 'Cancel', onPress: () => navigation.goBack() },
             { 
@@ -140,6 +142,8 @@ const NavigationScreen = () => {
         );
         return;
       }
+      
+      console.log('Using coordinates:', destCoords);
 
       // Fetch route
       await fetchRoute(
@@ -297,18 +301,33 @@ const NavigationScreen = () => {
 
   const geocodeAddress = async (address: string): Promise<RouteCoordinates | null> => {
     try {
-      // Use expo-location geocoding
-      const geocoded = await Location.geocodeAsync(address);
+      setIsGeocoding(true);
+      console.log('Geocoding address:', address);
+      
+      // Add timeout
+      const timeoutPromise = new Promise<null>((resolve) => {
+        setTimeout(() => resolve(null), 10000); // 10 second timeout
+      });
+      
+      const geocodePromise = Location.geocodeAsync(address);
+      
+      const geocoded = await Promise.race([geocodePromise, timeoutPromise]);
+      
       if (geocoded && geocoded.length > 0) {
+        console.log('Geocoding successful:', geocoded[0]);
         return {
           latitude: geocoded[0].latitude,
           longitude: geocoded[0].longitude,
         };
       }
+      
+      console.log('Geocoding returned no results');
       return null;
     } catch (error) {
       console.error('Geocoding error:', error);
       return null;
+    } finally {
+      setIsGeocoding(false);
     }
   };
 
@@ -395,7 +414,12 @@ const NavigationScreen = () => {
     <View style={styles.container}>
       {!currentLocation || !destinationCoords ? (
         <View style={styles.centered}>
-          <Text style={styles.loadingText}>Loading navigation...</Text>
+          <Text style={styles.loadingText}>
+            {isGeocoding ? 'Finding location...' : 'Loading navigation...'}
+          </Text>
+          <Text style={styles.loadingSubtext}>
+            {isGeocoding ? 'Converting address to coordinates' : 'Getting your location'}
+          </Text>
           <TouchableOpacity
             style={styles.cancelButton}
             onPress={() => navigation.goBack()}
@@ -511,6 +535,11 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     color: '#666',
+    marginBottom: 8,
+  },
+  loadingSubtext: {
+    fontSize: 14,
+    color: '#999',
     marginBottom: 20,
   },
   cancelButton: {
