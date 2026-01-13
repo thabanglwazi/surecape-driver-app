@@ -239,163 +239,167 @@ const TripDetailScreen = () => {
 
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Trip Status</Text>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor() }]}>
-          <Text style={styles.statusText}>{getStatusText()}</Text>
+      {/* Status Header */}
+      <View style={[styles.statusHeader, { backgroundColor: getStatusColor() }]}>
+        <Text style={styles.statusHeaderText}>{getStatusText()}</Text>
+      </View>
+
+      {/* Route Card */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Trip Route</Text>
+        <View style={styles.routeContainer}>
+          <View style={styles.routeIndicator}>
+            <View style={styles.pickupDot} />
+            <View style={styles.routeLine} />
+            <View style={styles.dropoffDot} />
+          </View>
+          <View style={styles.routeDetails}>
+            <View style={styles.locationBlock}>
+              <Text style={styles.locationLabel}>PICKUP</Text>
+              <Text style={styles.locationText}>
+                {booking?.pickup_location?.address || booking?.pickup_location || 'No pickup location'}
+              </Text>
+              <TouchableOpacity
+                style={styles.navigateLink}
+                onPress={() => handleNavigate(booking?.pickup_location?.address || booking?.pickup_location)}
+              >
+                <Text style={styles.navigateLinkText}>Navigate</Text>
+              </TouchableOpacity>
+            </View>
+
+            {booking?.trip_details?.stops && booking.trip_details.stops.length > 0 && (
+              booking.trip_details.stops.map((stop: any, index: number) => (
+                <View key={index} style={styles.locationBlock}>
+                  <Text style={styles.locationLabel}>STOP {index + 1}</Text>
+                  <Text style={styles.locationText}>
+                    {stop?.address || stop || 'No address'}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.navigateLink}
+                    onPress={() => handleNavigate(stop?.address || stop)}
+                  >
+                    <Text style={styles.navigateLinkText}>Navigate</Text>
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
+
+            <View style={styles.locationBlock}>
+              <Text style={styles.locationLabel}>DROP-OFF</Text>
+              <Text style={styles.locationText}>
+                {booking?.dropoff_location?.address || booking?.dropoff_location || 'No dropoff location'}
+              </Text>
+              <TouchableOpacity
+                style={styles.navigateLink}
+                onPress={() => handleNavigate(booking?.dropoff_location?.address || booking?.dropoff_location)}
+              >
+                <Text style={styles.navigateLinkText}>Navigate</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Trip Details</Text>
-        <View style={styles.detailRow}>
-          <Text style={styles.label}>Booking Type:</Text>
-          <Text style={styles.value}>{booking?.booking_type}</Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.label}>Passengers:</Text>
-          <Text style={styles.value}>{booking?.number_of_passengers}</Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.label}>Vehicle:</Text>
-          <Text style={styles.value}>
-            {typeof booking?.vehicle_type === 'object' 
-              ? booking?.vehicle_type?.name || 'N/A'
-              : booking?.vehicle_type || 'N/A'}
-          </Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.label}>License Plate:</Text>
-          <Text style={[styles.value, !trip.selected_vehicles?.[0]?.license_plate && styles.warningText]}>
-            {trip.selected_vehicles?.[0]?.license_plate || 
-             trip.selected_vehicles?.[0]?.licensePlate ||
-             trip.selected_vehicles?.[0]?.registration_number ||
-             trip.selected_vehicles?.[0]?.registrationNumber ||
-             trip.driver?.vehicle_info?.license_plate ||
-             trip.driver?.vehicle_info?.licensePlate ||
-             'Add vehicle via web app'}
-          </Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.label}>Date & Time:</Text>
-          <Text style={styles.value}>
-            {booking?.pickup_date} at {booking?.pickup_time}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Locations</Text>
-        
-        <View style={styles.locationCard}>
-          <Text style={styles.locationLabel}>📍 Pickup</Text>
-          <Text style={styles.locationText}>
-            {booking?.pickup_location?.address || booking?.pickup_location || 'No pickup location'}
-          </Text>
-          <TouchableOpacity
-            style={styles.navigateButton}
-            onPress={() => handleNavigate(booking?.pickup_location?.address || booking?.pickup_location)}
-          >
-            <Text style={styles.navigateButtonText}>Navigate</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Display stops if they exist */}
-        {booking?.trip_details?.stops && booking.trip_details.stops.length > 0 && (
-          <>
-            {booking.trip_details.stops.map((stop: any, index: number) => (
-              <View key={index} style={styles.locationCard}>
-                <Text style={styles.locationLabel}>🛑 Stop {index + 1}</Text>
-                <Text style={styles.locationText}>
-                  {stop?.address || stop || 'No address'}
-                </Text>
-                <TouchableOpacity
-                  style={styles.navigateButton}
-                  onPress={() => handleNavigate(stop?.address || stop)}
-                >
-                  <Text style={styles.navigateButtonText}>Navigate</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
-          </>
-        )}
-
-        <View style={styles.locationCard}>
-          <Text style={styles.locationLabel}>🏁 Drop-off</Text>
-          <Text style={styles.locationText}>
-            {booking?.dropoff_location?.address || booking?.dropoff_location || 'No dropoff location'}
-          </Text>
-          <TouchableOpacity
-            style={styles.navigateButton}
-            onPress={() => handleNavigate(booking?.dropoff_location?.address || booking?.dropoff_location)}
-          >
-            <Text style={styles.navigateButtonText}>Navigate</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Customer Information</Text>
-        <View style={styles.detailRow}>
-          <Text style={styles.label}>Name:</Text>
-          <Text style={styles.value}>
-            {customer?.name} {customer?.surname || ''}
-          </Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.label}>Email:</Text>
-          <Text style={styles.value}>{customer?.email || 'N/A'}</Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.label}>Phone:</Text>
-          <Text style={styles.value}>{customer?.phone || customer?.cell}</Text>
+      {/* Customer Card */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Customer</Text>
+        <View style={styles.customerInfo}>
+          <View style={styles.customerAvatar}>
+            <Text style={styles.customerInitials}>
+              {customer?.name?.charAt(0)}{customer?.surname?.charAt(0)}
+            </Text>
+          </View>
+          <View style={styles.customerDetails}>
+            <Text style={styles.customerName}>
+              {customer?.name} {customer?.surname || ''}
+            </Text>
+            <Text style={styles.customerEmail}>{customer?.email || 'N/A'}</Text>
+            <Text style={styles.customerPhone}>{customer?.phone || customer?.cell}</Text>
+          </View>
         </View>
         <TouchableOpacity style={styles.callButton} onPress={handleCallCustomer}>
           <Text style={styles.callButtonText}>📞 Call Customer</Text>
         </TouchableOpacity>
       </View>
 
+      {/* Trip Details Card */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Trip Details</Text>
+        <View style={styles.detailsGrid}>
+          <View style={styles.detailBox}>
+            <Text style={styles.detailLabel}>Type</Text>
+            <Text style={styles.detailValue}>{booking?.booking_type}</Text>
+          </View>
+          <View style={styles.detailBox}>
+            <Text style={styles.detailLabel}>Passengers</Text>
+            <Text style={styles.detailValue}>{booking?.number_of_passengers}</Text>
+          </View>
+          <View style={styles.detailBox}>
+            <Text style={styles.detailLabel}>Vehicle</Text>
+            <Text style={styles.detailValue}>
+              {typeof booking?.vehicle_type === 'object' 
+                ? booking?.vehicle_type?.name || 'N/A'
+                : booking?.vehicle_type || 'N/A'}
+            </Text>
+          </View>
+          <View style={styles.detailBox}>
+            <Text style={styles.detailLabel}>License Plate</Text>
+            <Text style={[styles.detailValue, !trip.selected_vehicles?.[0]?.license_plate && styles.warningText]}>
+              {trip.selected_vehicles?.[0]?.license_plate || 
+               trip.selected_vehicles?.[0]?.licensePlate ||
+               trip.driver?.vehicle_info?.license_plate ||
+               'Add via web'}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.timeBlock}>
+          <Text style={styles.timeLabel}>📅 Pickup Time</Text>
+          <Text style={styles.timeValue}>
+            {booking?.pickup_date} at {booking?.pickup_time}
+          </Text>
+        </View>
+      </View>
+
       {booking?.special_requests && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Special Requests</Text>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Special Requests</Text>
           <Text style={styles.specialRequests}>{booking.special_requests}</Text>
         </View>
       )}
 
-      <View style={styles.actions}>
+      {/* Action Buttons */}
+      <View style={styles.actionsContainer}>
         {trip.status === 'assigned' && (
           <>
             <TouchableOpacity
-              style={[styles.actionButton, styles.acceptButton]}
+              style={[styles.primaryButton, styles.acceptButton]}
               onPress={() => handleStatusUpdate('accepted')}
               disabled={updating}
             >
-              <Text style={styles.actionButtonText}>Accept Trip</Text>
+              <Text style={styles.primaryButtonText}>✓ Accept Trip</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.actionButton, styles.declineButton]}
+              style={[styles.secondaryButton]}
               onPress={() => handleStatusUpdate('declined')}
               disabled={updating}
             >
-              <Text style={[styles.actionButtonText, styles.declineText]}>
-                Decline
-              </Text>
+              <Text style={styles.secondaryButtonText}>Decline</Text>
             </TouchableOpacity>
           </>
         )}
 
         {trip.status === 'confirmed' && (
           <>
-            <View style={styles.statusBanner}>
-              <Text style={styles.statusBannerText}>✓ Trip Accepted - Ready to Start</Text>
+            <View style={styles.readyBanner}>
+              <Text style={styles.readyBannerText}>✓ Trip Accepted - Ready to Start</Text>
             </View>
             
             <TouchableOpacity
-              style={[styles.actionButton, styles.startTripButton, starting && styles.buttonDisabled]}
+              style={[styles.primaryButton, styles.startButton, starting && styles.buttonDisabled]}
               onPress={startTrip}
               disabled={starting}
             >
-              <Text style={styles.actionButtonText}>
+              <Text style={styles.primaryButtonText}>
                 {starting ? 'Starting Trip...' : '🚗 Confirm Pickup & Start Trip'}
               </Text>
             </TouchableOpacity>
@@ -404,10 +408,8 @@ const TripDetailScreen = () => {
 
         {trip.status === 'in_progress' && (
           <>
-            <View style={styles.inProgressBadge}>
-              <Text style={styles.inProgressText}>
-                🛣️ Trip In Progress
-              </Text>
+            <View style={styles.inProgressBanner}>
+              <Text style={styles.inProgressBannerText}>🛣️ Trip In Progress</Text>
               {trip.started_at && (
                 <Text style={styles.inProgressTime}>
                   Started: {new Date(trip.started_at).toLocaleTimeString()}
@@ -416,11 +418,11 @@ const TripDetailScreen = () => {
             </View>
             
             <TouchableOpacity
-              style={[styles.actionButton, styles.completeButton, updating && styles.buttonDisabled]}
+              style={[styles.primaryButton, styles.completeButton, updating && styles.buttonDisabled]}
               onPress={() => handleStatusUpdate('completed')}
               disabled={updating}
             >
-              <Text style={styles.actionButtonText}>
+              <Text style={styles.primaryButtonText}>
                 {updating ? 'Completing Trip...' : '✅ Complete Trip'}
               </Text>
             </TouchableOpacity>
@@ -434,136 +436,231 @@ const TripDetailScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f8f9fa',
   },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f8f9fa',
   },
-  section: {
-    backgroundColor: '#fff',
-    padding: 20,
-    marginBottom: 10,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 15,
-  },
-  statusBadge: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignSelf: 'stretch',
+  statusHeader: {
+    paddingVertical: 16,
+    paddingHorizontal: 24,
     alignItems: 'center',
   },
-  statusText: {
-    color: '#fff',
+  statusHeaderText: {
+    color: '#ffffff',
     fontWeight: '700',
     fontSize: 16,
     letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
-  detailRow: {
+  card: {
+    backgroundColor: '#ffffff',
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 16,
+  },
+  routeContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
   },
-  label: {
-    fontSize: 16,
-    color: '#666',
+  routeIndicator: {
+    width: 24,
+    alignItems: 'center',
+    marginRight: 16,
+    paddingTop: 8,
   },
-  value: {
-    fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
+  pickupDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#008080',
   },
-  locationCard: {
-    backgroundColor: '#f9f9f9',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 15,
+  routeLine: {
+    width: 2,
+    flex: 1,
+    backgroundColor: '#e0e0e0',
+    marginVertical: 8,
+  },
+  dropoffDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#ff4444',
+  },
+  routeDetails: {
+    flex: 1,
+    gap: 20,
+  },
+  locationBlock: {
+    gap: 8,
   },
   locationLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 5,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#6c757d',
+    letterSpacing: 0.5,
   },
   locationText: {
-    fontSize: 16,
-    color: '#333',
-    marginBottom: 10,
+    fontSize: 15,
+    color: '#1a1a1a',
+    lineHeight: 22,
   },
-  navigateButton: {
-    backgroundColor: '#008080',
-    padding: 10,
-    borderRadius: 8,
-    alignItems: 'center',
+  navigateLink: {
+    paddingVertical: 8,
   },
-  navigateButtonText: {
-    color: '#fff',
+  navigateLinkText: {
+    fontSize: 14,
     fontWeight: '600',
+    color: '#008080',
+  },
+  customerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  customerAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#008080',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  customerInitials: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  customerDetails: {
+    flex: 1,
+    gap: 4,
+  },
+  customerName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1a1a1a',
+  },
+  customerEmail: {
+    fontSize: 14,
+    color: '#6c757d',
+  },
+  customerPhone: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#1a1a1a',
   },
   callButton: {
     backgroundColor: '#34C759',
-    padding: 15,
-    borderRadius: 10,
+    paddingVertical: 14,
+    borderRadius: 12,
     alignItems: 'center',
-    marginTop: 15,
   },
   callButtonText: {
-    color: '#fff',
+    color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
   },
-  licensePlate: {
-    backgroundColor: '#f0f9ff',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
+  detailsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 16,
+  },
+  detailBox: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 12,
+  },
+  detailLabel: {
+    fontSize: 12,
     fontWeight: '600',
+    color: '#6c757d',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  detailValue: {
     fontSize: 16,
-    letterSpacing: 1,
+    fontWeight: '600',
+    color: '#1a1a1a',
   },
   warningText: {
     color: '#FF9500',
-    fontStyle: 'italic',
     fontSize: 14,
   },
-  specialRequests: {
-    fontSize: 16,
-    color: '#333',
-    lineHeight: 24,
+  timeBlock: {
+    backgroundColor: '#f8f9fa',
+    padding: 14,
+    borderRadius: 12,
   },
-  actions: {
-    padding: 20,
+  timeLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6c757d',
+    marginBottom: 6,
   },
-  actionButton: {
-    padding: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  statusBanner: {
-    backgroundColor: '#008080',
-    padding: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  statusBannerText: {
-    color: '#fff',
+  timeValue: {
     fontSize: 16,
     fontWeight: '600',
+    color: '#1a1a1a',
+  },
+  specialRequests: {
+    fontSize: 15,
+    color: '#1a1a1a',
+    lineHeight: 24,
+  },
+  actionsContainer: {
+    padding: 16,
+    paddingBottom: 32,
+    gap: 12,
+  },
+  primaryButton: {
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  primaryButtonText: {
+    color: '#ffffff',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  secondaryButton: {
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#FF3B30',
+  },
+  secondaryButtonText: {
+    color: '#FF3B30',
+    fontSize: 17,
+    fontWeight: '700',
   },
   acceptButton: {
     backgroundColor: '#34C759',
-  },
-  startTripButton: {
-    backgroundColor: '#2196F3',
   },
   startButton: {
     backgroundColor: '#008080',
@@ -571,39 +668,40 @@ const styles = StyleSheet.create({
   completeButton: {
     backgroundColor: '#FF9500',
   },
-  declineButton: {
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#FF3B30',
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  declineText: {
-    color: '#FF3B30',
-  },
   buttonDisabled: {
     opacity: 0.5,
   },
-  inProgressBadge: {
+  readyBanner: {
+    backgroundColor: '#E8F5E9',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#34C759',
+  },
+  readyBannerText: {
+    color: '#2E7D32',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  inProgressBanner: {
     backgroundColor: '#E3F2FD',
-    padding: 12,
-    borderRadius: 8,
-    marginVertical: 8,
+    padding: 16,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#2196F3',
   },
-  inProgressText: {
+  inProgressBannerText: {
     color: '#1976D2',
     fontSize: 16,
     fontWeight: '600',
+    textAlign: 'center',
   },
   inProgressTime: {
     color: '#1976D2',
-    fontSize: 12,
-    marginTop: 4,
+    fontSize: 13,
+    marginTop: 6,
+    textAlign: 'center',
   },
 });
 

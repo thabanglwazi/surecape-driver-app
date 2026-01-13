@@ -44,7 +44,7 @@
         "backgroundColor": "#008080"
       },
       "package": "com.surecape.driver",
-      "versionCode": 9,
+      "versionCode": 8,
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [

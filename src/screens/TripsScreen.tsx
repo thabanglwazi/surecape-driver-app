@@ -100,27 +100,22 @@ const TripsScreen = () => {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#134e5e', '#71b280']}
+        colors={['#008080', '#00a896']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.header}
       >
         <View style={styles.headerContent}>
-          <View style={styles.logoContainer}>
-            <Image
-              source={require('../../assets/images/surecape-logo.png')}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-          </View>
-          <View style={styles.headerTextContainer}>
-            <Text style={styles.headerTitle}>Active Trips</Text>
-            <View style={styles.tripCountBadge}>
-              <Text style={styles.tripCountText}>
-                {trips.length} {trips.length === 1 ? 'trip' : 'trips'}
-              </Text>
+          <Text style={styles.greetingText}>Hello, {driver?.full_name?.split(' ')[0] || 'Driver'}</Text>
+          <Text style={styles.headerTitle}>Your Trips</Text>
+          {trips.length > 0 && (
+            <View style={styles.tripCountContainer}>
+              <View style={styles.tripCountBadge}>
+                <Text style={styles.tripCountNumber}>{trips.length}</Text>
+              </View>
+              <Text style={styles.tripCountLabel}>Active</Text>
             </View>
-          </View>
+          )}
         </View>
       </LinearGradient>
 
@@ -152,64 +147,54 @@ const TripsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f8f9fa',
   },
   header: {
     paddingTop: 60,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 8,
+    paddingBottom: 30,
+    paddingHorizontal: 24,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
   headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    gap: 4,
   },
-  logoContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 4,
-  },
-  logo: {
-    width: 45,
-    height: 45,
-  },
-  headerTextContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  greetingText: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginBottom: 4,
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontSize: 32,
+    fontWeight: '700',
     color: '#ffffff',
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
+    marginBottom: 16,
+  },
+  tripCountContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   tripCountBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
+    backgroundColor: '#ffffff',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  tripCountText: {
-    fontSize: 14,
+  tripCountNumber: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#008080',
+  },
+  tripCountLabel: {
+    fontSize: 16,
     fontWeight: '600',
     color: '#ffffff',
   },
@@ -217,30 +202,35 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f8f9fa',
   },
   empty: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
+    backgroundColor: '#f8f9fa',
   },
   emptyIcon: {
-    fontSize: 64,
-    marginBottom: 20,
+    fontSize: 80,
+    marginBottom: 24,
+    opacity: 0.6,
   },
   emptyText: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 10,
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 12,
   },
   emptySubtext: {
     fontSize: 16,
-    color: '#666',
+    color: '#6c757d',
     textAlign: 'center',
+    lineHeight: 24,
   },
   list: {
-    padding: 15,
+    padding: 16,
+    paddingTop: 8,
   },
 });
 
