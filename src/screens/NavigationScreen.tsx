@@ -43,12 +43,25 @@ const NavigationScreen = () => {
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
 
   useEffect(() => {
+    // Set a maximum timeout for initialization
+    const initTimeout = setTimeout(() => {
+      if (!currentLocation) {
+        console.error('Navigation initialization timed out after 20 seconds');
+        Alert.alert(
+          'Timeout',
+          'Navigation is taking too long to load. Please check your internet connection and location services, then try again.',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+      }
+    }, 20000);
+
     startNavigation();
     if (tripId) {
       loadTripDetails();
     }
     
     return () => {
+      clearTimeout(initTimeout);
       // Clean up location subscription
       if (locationSubscription.current) {
         locationSubscription.current.remove();
@@ -109,25 +122,31 @@ const NavigationScreen = () => {
       console.log('Getting current location...');
       setLoadingMessage('Getting your location...');
       
-      // Add timeout to location request
-      const locationPromise = Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-        maximumAge: 10000,
-        timeout: 15000,
-      });
-      
-      const timeoutPromise = new Promise<null>((resolve) => {
-        setTimeout(() => {
-          console.log('Location request timed out');
-          resolve(null);
-        }, 15000);
-      });
-      
-      const location = await Promise.race([locationPromise, timeoutPromise]);
+      let location = null;
+      try {
+        // Add timeout to location request
+        const locationPromise = Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+          maximumAge: 10000,
+          timeout: 10000,
+        });
+        
+        const timeoutPromise = new Promise<Location.LocationObject | null>((resolve) => {
+          setTimeout(() => {
+            console.log('Location request timed out');
+            resolve(null);
+          }, 10000);
+        });
+        
+        location = await Promise.race([locationPromise, timeoutPromise]);
+      } catch (locError) {
+        console.error('Error getting location:', locError);
+        location = null;
+      }
       
       if (!location) {
         Alert.alert(
-          'Location Timeout',
+          'Location Error',
           'Could not get your current location. Make sure location services are enabled and try again.',
           [{ text: 'OK', onPress: () => navigation.goBack() }]
         );
@@ -220,9 +239,14 @@ const NavigationScreen = () => {
       );
     } catch (error) {
       console.error('Navigation error:', error);
-      Alert.alert('Error', 'Failed to start navigation', [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]);
+      setLoadingMessage('');
+      Alert.alert(
+        'Navigation Error', 
+        `Failed to start navigation: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        [
+          { text: 'OK', onPress: () => navigation.goBack() }
+        ]
+      );
     }
   };
 
