@@ -12,6 +12,7 @@ import {
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
+import RNShake from 'react-native-shake';
 import { RootStackParamList } from '../types';
 import { supabase } from '../services/supabase';
 
@@ -39,14 +40,43 @@ const NavigationScreen = () => {
   const [trip, setTrip] = useState<any>(null);
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('Initializing...');
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const mapRef = useRef<MapView>(null);
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
 
+  // Debug logging function - logs to console and stores for mobile debugging
+  const debugLog = (message: string, isError: boolean = false) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const logMessage = `[${timestamp}] ${message}`;
+    console.log(logMessage);
+    
+    setDebugLogs(prev => [...prev.slice(-4), logMessage]); // Keep last 5 logs
+    
+    // Show important errors as alerts on mobile
+    if (isError) {
+      Alert.alert('Debug Error', message);
+    }
+  };
+
+  // Function to show debug info
+  const showDebugInfo = () => {
+    Alert.alert(
+      'Debug Logs',
+      debugLogs.join('\n\n') || 'No logs yet',
+      [{ text: 'OK' }]
+    );
+  };
+
   useEffect(() => {
+    // Set up shake listener for debug info
+    RNShake.addListener(() => {
+      showDebugInfo();
+    });
+
     // Set a maximum timeout for initialization
     const initTimeout = setTimeout(() => {
       if (!currentLocation) {
-        console.error('Navigation initialization timed out after 20 seconds');
+        debugLog('Navigation initialization timed out after 20 seconds', true);
         Alert.alert(
           'Timeout',
           'Navigation is taking too long to load. Please check your internet connection and location services, then try again.',
@@ -61,6 +91,7 @@ const NavigationScreen = () => {
     }
     
     return () => {
+      RNShake.removeAllListeners();
       clearTimeout(initTimeout);
       // Clean up location subscription
       if (locationSubscription.current) {
@@ -119,11 +150,12 @@ const NavigationScreen = () => {
         return;
       }
 
-      console.log('Getting current location...');
+      debugLog('Getting current location...');
       setLoadingMessage('Getting your location...');
       
       let location = null;
       try {
+        debugLog('Requesting location with 10s timeout');
         // Add timeout to location request
         const locationPromise = Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
@@ -133,14 +165,18 @@ const NavigationScreen = () => {
         
         const timeoutPromise = new Promise<Location.LocationObject | null>((resolve) => {
           setTimeout(() => {
-            console.log('Location request timed out');
+            debugLog('Location request timed out after 10s', true);
             resolve(null);
           }, 10000);
         });
         
         location = await Promise.race([locationPromise, timeoutPromise]);
+        
+        if (location) {
+          debugLog(`Location obtained: ${location.coords.latitude}, ${location.coords.longitude}`);
+        }
       } catch (locError) {
-        console.error('Error getting location:', locError);
+        debugLog(`Error getting location: ${locError}`, true);
         location = null;
       }
       
@@ -158,16 +194,17 @@ const NavigationScreen = () => {
 
       // Parse destination coordinates
       setLoadingMessage('Finding destination...');
+      debugLog(`Parsing destination: ${destination}`);
       let destCoords = parseCoordinates(destination);
       
       // If no coordinates found, try geocoding the address
       if (!destCoords) {
-        console.log('No coordinates in destination, attempting geocoding...');
+        debugLog('No coordinates found, attempting geocoding...');
         destCoords = await geocodeAddress(destination);
       }
       
       if (!destCoords) {
-        console.log('Both parsing and geocoding failed');
+        debugLog('Both parsing and geocoding failed', true);
         Alert.alert(
           'Location Error', 
           'Could not find coordinates for this location. The address may need to be more specific, or you can open in Google Maps.',
@@ -357,11 +394,14 @@ const NavigationScreen = () => {
   const geocodeAddress = async (address: string): Promise<RouteCoordinates | null> => {
     try {
       setIsGeocoding(true);
-      console.log('Geocoding address:', address);
+      debugLog(`Starting geocoding for: ${address}`);
       
       // Add timeout
       const timeoutPromise = new Promise<null>((resolve) => {
-        setTimeout(() => resolve(null), 10000); // 10 second timeout
+        setTimeout(() => {
+          debugLog('Geocoding timed out after 10s', true);
+          resolve(null);
+        }, 10000);
       });
       
       const geocodePromise = Location.geocodeAsync(address);
@@ -369,17 +409,17 @@ const NavigationScreen = () => {
       const geocoded = await Promise.race([geocodePromise, timeoutPromise]);
       
       if (geocoded && geocoded.length > 0) {
-        console.log('Geocoding successful:', geocoded[0]);
+        debugLog(`Geocoding successful: ${geocoded[0].latitude}, ${geocoded[0].longitude}`);
         return {
           latitude: geocoded[0].latitude,
           longitude: geocoded[0].longitude,
         };
       }
       
-      console.log('Geocoding returned no results');
+      debugLog('Geocoding returned no results', true);
       return null;
     } catch (error) {
-      console.error('Geocoding error:', error);
+      debugLog(`Geocoding error: ${error}`, true);
       return null;
     } finally {
       setIsGeocoding(false);
@@ -475,6 +515,12 @@ const NavigationScreen = () => {
           <Text style={styles.loadingSubtext}>
             {isGeocoding ? 'Converting address to coordinates' : 'This may take a few seconds'}
           </Text>
+          <TouchableOpacity 
+            style={[styles.cancelButton, { marginTop: 10 }]}
+            onPress={showDebugInfo}
+          >
+            <Text style={styles.cancelButtonText}>Show Debug Info</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.cancelButton}
             onPress={() => navigation.goBack()}
