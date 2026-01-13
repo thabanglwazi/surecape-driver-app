@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 16,
     top: '50%',
-    transform: [{ translateY: -12 }],
+    marginTop: -12,
   },
   chevron: {
     fontSize: 32,
