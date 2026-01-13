@@ -118,14 +118,12 @@ const TripDetailScreen = () => {
     }
   };
 
-  const handleNavigate = (location: string) => {
-    const url = Platform.OS === 'ios'
-      ? `maps://app?daddr=${encodeURIComponent(location)}`
-      : `google.navigation:q=${encodeURIComponent(location)}`;
-    
-    Linking.openURL(url).catch(() => {
-      Alert.alert('Error', 'Unable to open maps');
-    });
+  const handleNavigate = (location: string, locationName?: string) => {
+    // Use in-app navigation instead of external maps
+    navigation.navigate('Navigation' as never, { 
+      destination: location,
+      destinationName: locationName 
+    } as never);
   };
 
   const startTrip = async () => {
@@ -261,9 +259,12 @@ const TripDetailScreen = () => {
               </Text>
               <TouchableOpacity
                 style={styles.navigateLink}
-                onPress={() => handleNavigate(booking?.pickup_location?.address || booking?.pickup_location)}
+                onPress={() => handleNavigate(
+                  booking?.pickup_location?.address || booking?.pickup_location,
+                  'Pickup Location'
+                )}
               >
-                <Text style={styles.navigateLinkText}>Navigate</Text>
+                <Text style={styles.navigateLinkText}>🧭 Navigate</Text>
               </TouchableOpacity>
             </View>
 
@@ -276,9 +277,12 @@ const TripDetailScreen = () => {
                   </Text>
                   <TouchableOpacity
                     style={styles.navigateLink}
-                    onPress={() => handleNavigate(stop?.address || stop)}
+                    onPress={() => handleNavigate(
+                      stop?.address || stop,
+                      `Stop ${index + 1}`
+                    )}
                   >
-                    <Text style={styles.navigateLinkText}>Navigate</Text>
+                    <Text style={styles.navigateLinkText}>🧭 Navigate</Text>
                   </TouchableOpacity>
                 </View>
               ))
@@ -291,9 +295,12 @@ const TripDetailScreen = () => {
               </Text>
               <TouchableOpacity
                 style={styles.navigateLink}
-                onPress={() => handleNavigate(booking?.dropoff_location?.address || booking?.dropoff_location)}
+                onPress={() => handleNavigate(
+                  booking?.dropoff_location?.address || booking?.dropoff_location,
+                  'Drop-off Location'
+                )}
               >
-                <Text style={styles.navigateLinkText}>Navigate</Text>
+                <Text style={styles.navigateLinkText}>🧭 Navigate</Text>
               </TouchableOpacity>
             </View>
           </View>

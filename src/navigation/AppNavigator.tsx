@@ -9,6 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import LoginScreen from '../screens/LoginScreen';
 import TripsScreen from '../screens/TripsScreen';
 import TripDetailScreen from '../screens/TripDetailScreen';
+import NavigationScreen from '../screens/NavigationScreen';
 import HistoryScreen from '../screens/HistoryScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import { Colors } from '../constants/theme';
@@ -86,6 +87,14 @@ const AppNavigator = () => {
                 headerShown: true,
                 title: 'Trip Details',
                 headerBackTitle: 'Back'
+              }}
+            />
+            <Stack.Screen 
+              name="Navigation" 
+              component={NavigationScreen}
+              options={{ 
+                headerShown: false,
+                presentation: 'fullScreenModal'
               }}
             />
           </>
