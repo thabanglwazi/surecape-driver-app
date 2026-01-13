@@ -43,6 +43,7 @@ const NavigationScreen = () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission Denied', 'Location permission is required for navigation');
+        navigation.goBack();
         return;
       }
 
@@ -54,44 +55,53 @@ const NavigationScreen = () => {
       // Parse destination coordinates
       const destCoords = parseCoordinates(destination);
       
-      if (destCoords) {
-        // Fetch route from Google Directions API
-        await fetchRoute(
-          { latitude: location.coords.latitude, longitude: location.coords.longitude },
-          destCoords
+      if (!destCoords) {
+        Alert.alert(
+          'Location Error', 
+          'Could not parse destination coordinates. Make sure the location includes coordinates (e.g., "Address, -26.123, 28.456")',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
         );
-
-        // Start location tracking
-        await Location.watchPositionAsync(
-          {
-            accuracy: Location.Accuracy.High,
-            timeInterval: 5000,
-            distanceInterval: 10,
-          },
-          (newLocation) => {
-            setCurrentLocation(newLocation);
-            // Update map camera to follow driver
-            if (mapRef.current) {
-              mapRef.current.animateCamera({
-                center: {
-                  latitude: newLocation.coords.latitude,
-                  longitude: newLocation.coords.longitude,
-                },
-                heading: newLocation.coords.heading || 0,
-              });
-            }
-          }
-        );
+        return;
       }
+
+      // Fetch route
+      await fetchRoute(
+        { latitude: location.coords.latitude, longitude: location.coords.longitude },
+        destCoords
+      );
+
+      // Start location tracking
+      await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.High,
+          timeInterval: 5000,
+          distanceInterval: 10,
+        },
+        (newLocation) => {
+          setCurrentLocation(newLocation);
+          // Update map camera to follow driver
+          if (mapRef.current) {
+            mapRef.current.animateCamera({
+              center: {
+                latitude: newLocation.coords.latitude,
+                longitude: newLocation.coords.longitude,
+              },
+              heading: newLocation.coords.heading || 0,
+            });
+          }
+        }
+      );
     } catch (error) {
       console.error('Navigation error:', error);
-      Alert.alert('Error', 'Failed to start navigation');
+      Alert.alert('Error', 'Failed to start navigation', [
+        { text: 'OK', onPress: () => navigation.goBack() }
+      ]);
     }
   };
 
   const parseCoordinates = (locationString: string): RouteCoordinates | null => {
     try {
-      // Try to extract coordinates from string
+      // Try to extract coordinates from string (format: "lat,lng" or "address with lat,lng")
       const coordsMatch = locationString.match(/(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
       if (coordsMatch) {
         return {
@@ -99,6 +109,9 @@ const NavigationScreen = () => {
           longitude: parseFloat(coordsMatch[2]),
         };
       }
+      
+      // If no coordinates found, return null (will need geocoding or fallback)
+      console.log('No coordinates found in:', locationString);
       return null;
     } catch (error) {
       console.error('Error parsing coordinates:', error);
@@ -108,33 +121,35 @@ const NavigationScreen = () => {
 
   const fetchRoute = async (origin: RouteCoordinates, destination: RouteCoordinates) => {
     try {
-      const apiKey = 'YOUR_GOOGLE_MAPS_API_KEY'; // Replace with your API key from app.json
-      const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin.latitude},${origin.longitude}&destination=${destination.latitude},${destination.longitude}&key=${apiKey}`;
+      // For now, just draw a straight line since we don't have Google API key
+      // User needs to add their API key to app.json
+      console.log('Drawing direct route from origin to destination');
+      setRouteCoordinates([origin, destination]);
       
-      const response = await fetch(url);
-      const data = await response.json();
-
-      if (data.routes && data.routes.length > 0) {
-        const route = data.routes[0];
-        const points = decodePolyline(route.overview_polyline.points);
-        setRouteCoordinates(points);
-        
-        // Set distance and duration
-        const leg = route.legs[0];
-        setDistance(leg.distance.text);
-        setDuration(leg.duration.text);
-
-        // Fit map to show entire route
-        if (mapRef.current) {
-          mapRef.current.fitToCoordinates([origin, destination], {
-            edgePadding: { top: 100, right: 50, bottom: 100, left: 50 },
-            animated: true,
-          });
-        }
+      // Calculate approximate distance (simplified)
+      const R = 6371; // Earth radius in km
+      const dLat = (destination.latitude - origin.latitude) * Math.PI / 180;
+      const dLon = (destination.longitude - origin.longitude) * Math.PI / 180;
+      const a = 
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(origin.latitude * Math.PI / 180) * Math.cos(destination.latitude * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const distance = R * c;
+      
+      setDistance(`${distance.toFixed(1)} km`);
+      setDuration(`~${Math.ceil(distance * 2)} min`); // Rough estimate
+      
+      // Fit map to show entire route
+      if (mapRef.current) {
+        mapRef.current.fitToCoordinates([origin, destination], {
+          edgePadding: { top: 100, right: 50, bottom: 100, left: 50 },
+          animated: true,
+        });
       }
     } catch (error) {
       console.error('Error fetching route:', error);
-      // Fallback: draw straight line
+      // Still draw straight line as fallback
       setRouteCoordinates([origin, destination]);
     }
   };
@@ -183,74 +198,80 @@ const NavigationScreen = () => {
 
   const destinationCoords = parseCoordinates(destination);
 
-  if (!currentLocation || !destinationCoords) {
-    return (
-      <View style={styles.centered}>
-        <Text>Loading navigation...</Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      <MapView
-        ref={mapRef}
-        provider={PROVIDER_GOOGLE}
-        style={styles.map}
-        initialRegion={{
-          latitude: currentLocation.coords.latitude,
-          longitude: currentLocation.coords.longitude,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
-        }}
-        showsUserLocation={true}
-        showsMyLocationButton={true}
-        showsTraffic={true}
-        followsUserLocation={true}
-      >
-        {/* Destination Marker */}
-        <Marker
-          coordinate={destinationCoords}
-          title={destinationName || 'Destination'}
-          pinColor="#FF3B30"
-        />
-
-        {/* Route Polyline */}
-        {routeCoordinates.length > 0 && (
-          <Polyline
-            coordinates={routeCoordinates}
-            strokeWidth={4}
-            strokeColor="#008080"
-          />
-        )}
-      </MapView>
-
-      {/* Navigation Info Overlay */}
-      <View style={styles.overlay}>
-        <View style={styles.infoCard}>
-          <Text style={styles.destinationText}>{destinationName || 'Destination'}</Text>
-          {distance && duration && (
-            <View style={styles.statsRow}>
-              <View style={styles.stat}>
-                <Text style={styles.statLabel}>Distance</Text>
-                <Text style={styles.statValue}>{distance}</Text>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.stat}>
-                <Text style={styles.statLabel}>ETA</Text>
-                <Text style={styles.statValue}>{duration}</Text>
-              </View>
-            </View>
-          )}
+      {!currentLocation || !destinationCoords ? (
+        <View style={styles.centered}>
+          <Text style={styles.loadingText}>Loading navigation...</Text>
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
         </View>
+      ) : (
+        <>
+          <MapView
+            ref={mapRef}
+            provider={PROVIDER_GOOGLE}
+            style={styles.map}
+            initialRegion={{
+              latitude: currentLocation.coords.latitude,
+              longitude: currentLocation.coords.longitude,
+              latitudeDelta: 0.05,
+              longitudeDelta: 0.05,
+            }}
+            showsUserLocation={true}
+            showsMyLocationButton={true}
+            showsTraffic={true}
+            followsUserLocation={true}
+          >
+            {/* Destination Marker */}
+            <Marker
+              coordinate={destinationCoords}
+              title={destinationName || 'Destination'}
+              pinColor="#FF3B30"
+            />
 
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.backButtonText}>← Back to Trip</Text>
-        </TouchableOpacity>
-      </View>
+            {/* Route Polyline */}
+            {routeCoordinates.length > 0 && (
+              <Polyline
+                coordinates={routeCoordinates}
+                strokeWidth={4}
+                strokeColor="#008080"
+              />
+            )}
+          </MapView>
+
+          {/* Navigation Info Overlay */}
+          <View style={styles.overlay}>
+            <View style={styles.infoCard}>
+              <Text style={styles.destinationText}>{destinationName || 'Destination'}</Text>
+              {distance && duration && (
+                <View style={styles.statsRow}>
+                  <View style={styles.stat}>
+                    <Text style={styles.statLabel}>Distance</Text>
+                    <Text style={styles.statValue}>{distance}</Text>
+                  </View>
+                  <View style={styles.divider} />
+                  <View style={styles.stat}>
+                    <Text style={styles.statLabel}>ETA</Text>
+                    <Text style={styles.statValue}>{duration}</Text>
+                  </View>
+                </View>
+              )}
+            </View>
+
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
+            >
+              <Text style={styles.backButtonText}>← Back to Trip</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
     </View>
   );
 };
@@ -263,6 +284,23 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 20,
+  },
+  cancelButton: {
+    backgroundColor: '#008080',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  cancelButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
   map: {
     width: width,
