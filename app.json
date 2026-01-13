@@ -22,12 +22,6 @@
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
         }
-      ],
-      [
-        "react-native-maps",
-        {
-          "enableGoogleMapsOnAndroid": true
-        }
       ]
     ],
     "ios": {
