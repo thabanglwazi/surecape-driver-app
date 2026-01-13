@@ -38,6 +38,7 @@ const NavigationScreen = () => {
   const [hasArrived, setHasArrived] = useState(false);
   const [trip, setTrip] = useState<any>(null);
   const [isGeocoding, setIsGeocoding] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('Initializing...');
   const mapRef = useRef<MapView>(null);
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
 
@@ -97,6 +98,7 @@ const NavigationScreen = () => {
   const startNavigation = async () => {
     try {
       // Get current location
+      setLoadingMessage('Checking permissions...');
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission Denied', 'Location permission is required for navigation');
@@ -104,12 +106,39 @@ const NavigationScreen = () => {
         return;
       }
 
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
+      console.log('Getting current location...');
+      setLoadingMessage('Getting your location...');
+      
+      // Add timeout to location request
+      const locationPromise = Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+        maximumAge: 10000,
+        timeout: 15000,
       });
+      
+      const timeoutPromise = new Promise<null>((resolve) => {
+        setTimeout(() => {
+          console.log('Location request timed out');
+          resolve(null);
+        }, 15000);
+      });
+      
+      const location = await Promise.race([locationPromise, timeoutPromise]);
+      
+      if (!location) {
+        Alert.alert(
+          'Location Timeout',
+          'Could not get your current location. Make sure location services are enabled and try again.',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+        return;
+      }
+      
+      console.log('Current location obtained:', location.coords);
       setCurrentLocation(location);
 
       // Parse destination coordinates
+      setLoadingMessage('Finding destination...');
       let destCoords = parseCoordinates(destination);
       
       // If no coordinates found, try geocoding the address
@@ -146,10 +175,12 @@ const NavigationScreen = () => {
       console.log('Using coordinates:', destCoords);
 
       // Fetch route
+      setLoadingMessage('Calculating route...');
       await fetchRoute(
         { latitude: location.coords.latitude, longitude: location.coords.longitude },
         destCoords
       );
+      setLoadingMessage('');
 
       // Start location tracking with arrival detection
       locationSubscription.current = await Location.watchPositionAsync(
@@ -415,10 +446,10 @@ const NavigationScreen = () => {
       {!currentLocation || !destinationCoords ? (
         <View style={styles.centered}>
           <Text style={styles.loadingText}>
-            {isGeocoding ? 'Finding location...' : 'Loading navigation...'}
+            {loadingMessage || (isGeocoding ? 'Finding location...' : 'Loading navigation...')}
           </Text>
           <Text style={styles.loadingSubtext}>
-            {isGeocoding ? 'Converting address to coordinates' : 'Getting your location'}
+            {isGeocoding ? 'Converting address to coordinates' : 'This may take a few seconds'}
           </Text>
           <TouchableOpacity
             style={styles.cancelButton}
