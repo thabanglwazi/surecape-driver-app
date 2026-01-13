@@ -186,7 +186,17 @@ const TripDetailScreen = () => {
         await startLocationTracking(driver.id);
       }
       
-      Alert.alert('Success', '🚗 Trip started! Customer has been notified.');
+      // Automatically navigate to pickup location (Uber-style)
+      const booking = trip.booking;
+      const pickupLocation = booking?.pickup_location?.address || booking?.pickup_location;
+      if (pickupLocation) {
+        navigation.navigate('Navigation' as never, { 
+          destination: pickupLocation,
+          destinationName: 'Pickup Location',
+          tripId: tripId,
+          nextDestination: 'pickup'
+        } as never);
+      }
       
     } catch (error: any) {
       console.error('Error starting trip:', error);

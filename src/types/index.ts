@@ -99,7 +99,12 @@ export type RootStackParamList = {
   Login: undefined;
   Main: undefined;
   TripDetail: { tripId: string };
-  Navigation: { destination: string; destinationName?: string };
+  Navigation: { 
+    destination: string; 
+    destinationName?: string;
+    tripId?: string;
+    nextDestination?: 'pickup' | 'dropoff' | 'complete';
+  };
 };
 
 export type TabParamList = {

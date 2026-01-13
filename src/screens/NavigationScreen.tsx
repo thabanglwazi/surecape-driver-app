@@ -12,10 +12,12 @@ import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
+import { supabase } from '../services/supabase';
 
 type NavigationRouteProp = RouteProp<RootStackParamList, 'Navigation'>;
 
 const { width, height } = Dimensions.get('window');
+const ARRIVAL_THRESHOLD = 100; // meters
 
 interface RouteCoordinates {
   latitude: number;
@@ -25,17 +27,70 @@ interface RouteCoordinates {
 const NavigationScreen = () => {
   const route = useRoute<NavigationRouteProp>();
   const navigation = useNavigation();
-  const { destination, destinationName } = route.params;
+  const { destination, destinationName, tripId, nextDestination } = route.params;
   
   const [currentLocation, setCurrentLocation] = useState<Location.LocationObject | null>(null);
   const [routeCoordinates, setRouteCoordinates] = useState<RouteCoordinates[]>([]);
   const [distance, setDistance] = useState<string>('');
   const [duration, setDuration] = useState<string>('');
+  const [distanceToDestination, setDistanceToDestination] = useState<number>(0);
+  const [hasArrived, setHasArrived] = useState(false);
+  const [trip, setTrip] = useState<any>(null);
   const mapRef = useRef<MapView>(null);
+  const locationSubscription = useRef<Location.LocationSubscription | null>(null);
 
   useEffect(() => {
     startNavigation();
+    if (tripId) {
+      loadTripDetails();
+    }
+    
+    return () => {
+      // Clean up location subscription
+      if (locationSubscription.current) {
+        locationSubscription.current.remove();
+      }
+    };
   }, []);
+
+  const loadTripDetails = async () => {
+    if (!tripId) return;
+    try {
+      const { data, error } = await supabase
+        .from('driver_assignments')
+        .select(`
+          *,
+          booking:bookings(
+            *,
+            pickup_location,
+            dropoff_location,
+            trip_details
+          )
+        `)
+        .eq('id', tripId)
+        .single();
+      
+      if (error) throw error;
+      setTrip(data);
+    } catch (error) {
+      console.error('Error loading trip:', error);
+    }
+  };
+
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371e3; // Earth radius in meters
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c; // Distance in meters
+  };
 
   const startNavigation = async () => {
     try {
@@ -70,8 +125,8 @@ const NavigationScreen = () => {
         destCoords
       );
 
-      // Start location tracking
-      await Location.watchPositionAsync(
+      // Start location tracking with arrival detection
+      locationSubscription.current = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.High,
           timeInterval: 5000,
@@ -79,6 +134,21 @@ const NavigationScreen = () => {
         },
         (newLocation) => {
           setCurrentLocation(newLocation);
+          
+          // Calculate distance to destination
+          const distToDest = calculateDistance(
+            newLocation.coords.latitude,
+            newLocation.coords.longitude,
+            destCoords.latitude,
+            destCoords.longitude
+          );
+          setDistanceToDestination(distToDest);
+          
+          // Check if arrived (within 100 meters)
+          if (distToDest <= ARRIVAL_THRESHOLD && !hasArrived) {
+            setHasArrived(true);
+          }
+          
           // Update map camera to follow driver
           if (mapRef.current) {
             mapRef.current.animateCamera({
@@ -96,6 +166,90 @@ const NavigationScreen = () => {
       Alert.alert('Error', 'Failed to start navigation', [
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);
+    }
+  };
+
+  const handleArrival = async () => {
+    if (!tripId || !trip) {
+      navigation.goBack();
+      return;
+    }
+
+    try {
+      if (nextDestination === 'pickup') {
+        // At pickup - navigate to dropoff
+        const dropoffLocation = trip.booking?.dropoff_location?.address || trip.booking?.dropoff_location;
+        if (dropoffLocation) {
+          navigation.replace('Navigation' as never, {
+            destination: dropoffLocation,
+            destinationName: 'Drop-off Location',
+            tripId: tripId,
+            nextDestination: 'dropoff'
+          } as never);
+        }
+      } else if (nextDestination === 'dropoff') {
+        // At dropoff - show complete trip button
+        Alert.alert(
+          'Arrived at Destination',
+          'Complete this trip?',
+          [
+            { text: 'Not Yet', style: 'cancel' },
+            {
+              text: 'Complete Trip',
+              onPress: async () => {
+                await completeTrip();
+              }
+            }
+          ]
+        );
+      } else {
+        // Default - just go back
+        navigation.goBack();
+      }
+    } catch (error) {
+      console.error('Error handling arrival:', error);
+      Alert.alert('Error', 'Failed to proceed');
+    }
+  };
+
+  const completeTrip = async () => {
+    try {
+      const now = new Date().toISOString();
+      
+      // Update assignment to completed
+      const { error: assignmentError } = await supabase
+        .from('driver_assignments')
+        .update({
+          status: 'completed',
+          completed_at: now,
+          updated_at: now
+        })
+        .eq('id', tripId);
+
+      if (assignmentError) throw assignmentError;
+
+      // Update booking to completed
+      const { error: bookingError } = await supabase
+        .from('bookings')
+        .update({
+          status: 'completed',
+          updated_at: now
+        })
+        .eq('id', trip.booking_id);
+
+      if (bookingError) throw bookingError;
+
+      Alert.alert('Success', 'Trip completed successfully!', [
+        {
+          text: 'OK',
+          onPress: () => {
+            navigation.navigate('Main' as never);
+          }
+        }
+      ]);
+    } catch (error) {
+      console.error('Error completing trip:', error);
+      Alert.alert('Error', 'Failed to complete trip');
     }
   };
 
@@ -248,27 +402,56 @@ const NavigationScreen = () => {
           <View style={styles.overlay}>
             <View style={styles.infoCard}>
               <Text style={styles.destinationText}>{destinationName || 'Destination'}</Text>
-              {distance && duration && (
-                <View style={styles.statsRow}>
-                  <View style={styles.stat}>
-                    <Text style={styles.statLabel}>Distance</Text>
-                    <Text style={styles.statValue}>{distance}</Text>
-                  </View>
-                  <View style={styles.divider} />
-                  <View style={styles.stat}>
-                    <Text style={styles.statLabel}>ETA</Text>
-                    <Text style={styles.statValue}>{duration}</Text>
-                  </View>
+              {hasArrived ? (
+                <View style={styles.arrivedContainer}>
+                  <Text style={styles.arrivedText}>✓ You've Arrived!</Text>
+                  <Text style={styles.arrivedSubtext}>Within {Math.round(distanceToDestination)}m</Text>
                 </View>
+              ) : (
+                <>
+                  {distance && duration && (
+                    <View style={styles.statsRow}>
+                      <View style={styles.stat}>
+                        <Text style={styles.statLabel}>Distance</Text>
+                        <Text style={styles.statValue}>{distance}</Text>
+                      </View>
+                      <View style={styles.divider} />
+                      <View style={styles.stat}>
+                        <Text style={styles.statLabel}>ETA</Text>
+                        <Text style={styles.statValue}>{duration}</Text>
+                      </View>
+                    </View>
+                  )}
+                  {distanceToDestination > 0 && (
+                    <Text style={styles.distanceText}>
+                      {distanceToDestination < 1000 
+                        ? `${Math.round(distanceToDestination)}m away`
+                        : `${(distanceToDestination / 1000).toFixed(1)}km away`}
+                    </Text>
+                  )}
+                </>
               )}
             </View>
 
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => navigation.goBack()}
-            >
-              <Text style={styles.backButtonText}>← Back to Trip</Text>
-            </TouchableOpacity>
+            {hasArrived && tripId ? (
+              <TouchableOpacity
+                style={styles.arrivedButton}
+                onPress={handleArrival}
+              >
+                <Text style={styles.arrivedButtonText}>
+                  {nextDestination === 'pickup' ? '✓ Picked Up - Continue to Drop-off' : 
+                   nextDestination === 'dropoff' ? '✓ Complete Trip' : 
+                   '✓ Arrived'}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => navigation.goBack()}
+              >
+                <Text style={styles.backButtonText}>← Back to Trip</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </>
       )}
@@ -362,6 +545,38 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  arrivedContainer: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  arrivedText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#34C759',
+    marginBottom: 4,
+  },
+  arrivedSubtext: {
+    fontSize: 14,
+    color: '#666',
+  },
+  arrivedButton: {
+    backgroundColor: '#34C759',
+    borderRadius: 12,
+    padding: 18,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  arrivedButtonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  distanceText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 8,
   },
 });
 
