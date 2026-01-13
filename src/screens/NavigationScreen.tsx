@@ -7,6 +7,7 @@ import {
   Alert,
   Dimensions,
   Platform,
+  Linking,
 } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -108,13 +109,34 @@ const NavigationScreen = () => {
       setCurrentLocation(location);
 
       // Parse destination coordinates
-      const destCoords = parseCoordinates(destination);
+      let destCoords = parseCoordinates(destination);
+      
+      // If no coordinates found, try geocoding the address
+      if (!destCoords) {
+        console.log('Attempting to geocode address:', destination);
+        destCoords = await geocodeAddress(destination);
+      }
       
       if (!destCoords) {
         Alert.alert(
           'Location Error', 
-          'Could not parse destination coordinates. Make sure the location includes coordinates (e.g., "Address, -26.123, 28.456")',
-          [{ text: 'OK', onPress: () => navigation.goBack() }]
+          'Could not find coordinates for this location. Would you like to open in Google Maps instead?',
+          [
+            { text: 'Cancel', onPress: () => navigation.goBack() },
+            { 
+              text: 'Open Google Maps', 
+              onPress: () => {
+                const url = Platform.OS === 'ios'
+                  ? `maps://app?daddr=${encodeURIComponent(destination)}`
+                  : `google.navigation:q=${encodeURIComponent(destination)}`;
+                
+                Linking.openURL(url).catch(() => {
+                  Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`);
+                });
+                navigation.goBack();
+              }
+            }
+          ]
         );
         return;
       }
@@ -269,6 +291,23 @@ const NavigationScreen = () => {
       return null;
     } catch (error) {
       console.error('Error parsing coordinates:', error);
+      return null;
+    }
+  };
+
+  const geocodeAddress = async (address: string): Promise<RouteCoordinates | null> => {
+    try {
+      // Use expo-location geocoding
+      const geocoded = await Location.geocodeAsync(address);
+      if (geocoded && geocoded.length > 0) {
+        return {
+          latitude: geocoded[0].latitude,
+          longitude: geocoded[0].longitude,
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Geocoding error:', error);
       return null;
     }
   };
